@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
@@ -191,8 +192,39 @@ local function updateFolderStructure()
 	end
 end
 
--- Обновляем структуру
-while true do
-	updateFolderStructure()
-	wait(1)
+local function setupFolderListeners()
+	-- Обработка добавления новых папок
+	game.Workspace.ChildAdded:Connect(function(child)
+		if child:IsA("Folder") then
+			createFolderButton(child, listScrollingFrame, 0)
+		end
+	end)
+
+	-- Обработка удаления папок
+	game.Workspace.ChildRemoved:Connect(function(child)
+		if child:IsA("Folder") then
+			-- Удаляем отображение этой папки, если оно существует
+			if folderStates[child] then
+				local state = folderStates[child]
+				-- Удаляем кнопку
+				if state.button then
+					state.button:Destroy()
+				end
+				-- Удаляем панель
+				if state.panel then
+					state.panel:Destroy()
+				end
+				folderStates[child] = nil
+			end
+		end
+	end)
 end
+
+-- Изначально создаем все папки и устанавливаем слушателей
+for _, obj in ipairs(game.Workspace:GetChildren()) do
+	if obj:IsA("Folder") then
+		createFolderButton(obj, listScrollingFrame, 0)
+	end
+end
+
+setupFolderListeners()
