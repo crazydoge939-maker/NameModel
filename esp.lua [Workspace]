@@ -1,0 +1,276 @@
+-- Скрипт для StarterPlayerScripts
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local workspace = game:GetService("Workspace")
+local camera = workspace.CurrentCamera
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Создаем основной ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FolderExplorerGUI"
+screenGui.Parent = playerGui
+
+-- Создаем панель для кнопок
+local panel = Instance.new("Frame")
+panel.Size = UDim2.new(0, 200, 0, 50)
+panel.Position = UDim2.new(0, 10, 0, 10)
+panel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+panel.BorderSizePixel = 2
+panel.BorderColor3 = Color3.fromRGB(100, 100, 100)
+panel.Parent = screenGui
+panel.BackgroundTransparency = 0.2
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 20)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Объекты"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 14
+title.Font = Enum.Font.SourceSansBold
+title.Parent = panel
+
+local uiListLayout = Instance.new("UIListLayout")
+uiListLayout.Parent = panel
+uiListLayout.SortOrder = Enum.SortOrder.Name
+uiListLayout.Padding = UDim.new(0, 2)
+
+-- Создаем contentFrame справа от панели
+local contentFrame = Instance.new("Frame")
+contentFrame.Size = UDim2.new(0, 220, 0, 100)
+contentFrame.Position = UDim2.new(0, 0, 0, 0)
+contentFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+contentFrame.BorderSizePixel = 2
+contentFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+contentFrame.Parent = screenGui
+
+local contentLayout = Instance.new("UIListLayout")
+contentLayout.Parent = contentFrame
+contentLayout.SortOrder = Enum.SortOrder.Name
+contentLayout.Padding = UDim.new(0, 2)
+
+local currentFolderConnection -- переменная для хранения соединения
+
+local function updatePanelHeight()
+	local totalHeight = 0
+	for _, child in pairs(panel:GetChildren()) do
+		if child:IsA("GuiObject") then
+			totalHeight = totalHeight + child.Size.Y.Offset + uiListLayout.Padding.Offset
+		end
+	end
+	panel.Size = UDim2.new(0, 200, 0, totalHeight)
+end
+
+local function updateContentHeight()
+	local totalHeight = 0
+	for _, child in pairs(contentFrame:GetChildren()) do
+		if child:IsA("GuiObject") then
+			totalHeight = totalHeight + child.Size.Y.Offset + contentLayout.Padding.Offset
+		end
+	end
+	contentFrame.Size = UDim2.new(0, 220, 0, totalHeight)
+end
+
+-- Перемещение панели
+local dragging = false
+local dragOffset = Vector2.new()
+
+panel.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragOffset = Vector2.new(input.Position.X - panel.AbsolutePosition.X, input.Position.Y - panel.AbsolutePosition.Y)
+	end
+end)
+
+panel.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local newPosX = input.Position.X - dragOffset.X
+		local newPosY = input.Position.Y - dragOffset.Y
+		local screenSize = workspace.CurrentCamera.ViewportSize
+		newPosX = math.clamp(newPosX, 0, screenSize.X - panel.Size.X.Offset)
+		newPosY = math.clamp(newPosY, 0, screenSize.Y - panel.Size.Y.Offset)
+		panel.Position = UDim2.new(0, newPosX, 0, newPosY)
+		-- Обновляем позицию contentFrame справа от панели
+		contentFrame.Position = UDim2.new(0, panel.Position.X.Offset + panel.Size.X.Offset + 10, 0, panel.Position.Y.Offset)
+	end
+end)
+
+local function setContentFramePosition()
+	contentFrame.Position = UDim2.new(0, panel.Position.X.Offset + panel.Size.X.Offset + 10, 0, panel.Position.Y.Offset)
+end
+
+setContentFramePosition()
+
+local function clearContent()
+	for _, child in pairs(contentFrame:GetChildren()) do
+		if child:IsA("TextLabel") or child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+end
+
+local function getColorByType(obj)
+	if obj:IsA("Part") then
+		return Color3.fromRGB(160, 160, 160) -- Серый
+	elseif obj:IsA("MeshPart") then
+		return Color3.fromRGB(80, 80, 80) -- Темно Серый
+	elseif obj:IsA("UnionOperation") then
+		return Color3.fromRGB(0, 255, 0) -- Зеленый
+	elseif obj:IsA("Model") then
+		return Color3.fromRGB(255, 0, 255) -- Фиолет
+	elseif obj:IsA("Folder") then
+		return Color3.fromRGB(255, 165, 0) -- Оранж
+	else
+		return Color3.fromRGB(0, 0, 255) -- Синий по умолчанию
+	end
+end
+
+local function getLabelTextByType(obj)
+	if obj:IsA("Part") then
+		return "[Part]"
+	elseif obj:IsA("MeshPart") then
+		return "[MeshPart]"
+	elseif obj:IsA("UnionOperation") then
+		return "[Union]"
+	elseif obj:IsA("Model") then
+		return "[Model]"
+	elseif obj:IsA("Folder") then
+		return "[Folder]"
+	else
+		return "[Object]"
+	end
+end
+
+local function showObjectContents(obj)
+	-- отключаем предыдущее подключение
+	if currentFolderConnection then
+		currentFolderConnection:Disconnect()
+		currentFolderConnection = nil
+	end
+
+	clearContent()
+
+	local function updateContent()
+		clearContent()
+
+		local children = {}
+		local folderCount = {}
+
+		for _, child in pairs(obj:GetChildren()) do
+			if child:IsA("Folder") then
+				folderCount[child.Name] = (folderCount[child.Name] or 0) + 1
+			else
+				children[child.Name] = (children[child.Name] or 0) + 1
+			end
+		end
+
+		-- вывод файлов
+		for name, count in pairs(children) do
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.new(1, -4, 0, 20)
+			label.Text = name .. (count > 1 and (" x" .. count) or "")
+			label.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+			label.TextColor3 = Color3.fromRGB(255, 255, 255)
+			label.TextSize = 13
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.Parent = contentFrame
+		end
+
+		-- вывод папок (кнопки)
+		for name, count in pairs(folderCount) do
+			local subFolder = obj:FindFirstChild(name)
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1, -4, 0, 20)
+			btn.Text = "[Folder] " .. name .. (count > 1 and (" x" .. count) or "")
+			btn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+			btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+			btn.TextSize = 13
+			btn.Parent = contentFrame
+
+			btn.MouseButton1Click:Connect(function()
+				if subFolder and subFolder:IsA("Folder") then
+					showObjectContents(subFolder)
+				end
+			end)
+		end
+
+		updateContentHeight()
+	end
+
+	updateContent()
+
+	-- подключаемся к изменениям внутри объекта
+	currentFolderConnection = obj.ChildAdded:Connect(function()
+		updateContent()
+	end)
+	obj.ChildRemoved:Connect(function()
+		updateContent()
+	end)
+end
+
+local function createObjectButton(obj, displayName)
+	local name = displayName or obj.Name
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -4, 0, 20)
+	btn.Text = name
+	btn.BackgroundColor3 = getColorByType(obj)
+	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+	btn.TextSize = 13
+	btn.Parent = panel
+
+	btn.MouseButton1Click:Connect(function()
+		showObjectContents(obj)
+		wait()
+		updatePanelHeight()
+	end)
+end
+
+local function createObjectDisplay(obj)
+	local color = getColorByType(obj)
+	local labelText = getLabelTextByType(obj)
+	local displayName = obj.Name .. " " .. labelText
+
+	-- Проверяем есть ли вложенные объекты
+	if #obj:GetChildren() > 0 then
+		-- Создаем кнопку для просмотра содержимого
+		createObjectButton(obj, displayName)
+	else
+		-- Создаем просто метку
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, -4, 0, 20)
+		label.Text = displayName
+		label.BackgroundColor3 = color
+		label.TextColor3 = Color3.fromRGB(0, 0, 0)
+		label.TextSize = 13
+		label.Parent = panel
+	end
+end
+
+local function scanWorkspace()
+	-- очищаем старые кнопки и метки
+	for _, child in pairs(panel:GetChildren()) do
+		if child:IsA("TextButton") and child ~= title then
+			child:Destroy()
+		elseif child:IsA("TextLabel") and child ~= title then
+			child:Destroy()
+		end
+	end
+
+	-- ищем все объекты типа Part, MeshPart, Union, Model, Folder
+	for _, obj in pairs(workspace:GetChildren()) do
+		if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
+			createObjectDisplay(obj)
+		end
+	end
+	updatePanelHeight()
+end
+
+scanWorkspace()
