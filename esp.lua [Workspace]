@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local workspace = game:GetService("Workspace")
@@ -10,10 +11,10 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "FolderExplorerGUI"
 screenGui.Parent = playerGui
 
--- Создаем панель для кнопок
+-- Создаем основную панель для кнопок
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 200, 0, 50)
-panel.Position = UDim2.new(0, 10, 0, 10)
+panel.Size = UDim2.new(0.1, 0, 0.28, 0)
+panel.Position = UDim2.new(0.01, 0, 0.05, 0)
 panel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 panel.BorderSizePixel = 2
 panel.BorderColor3 = Color3.fromRGB(100, 100, 100)
@@ -21,238 +22,250 @@ panel.Parent = screenGui
 panel.BackgroundTransparency = 0.2
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 20)
+title.Size = UDim2.new(1, 0, 0.04, 0)
 title.Position = UDim2.new(0, 0, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = "Объекты"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 14
+title.TextScaled = true
 title.Font = Enum.Font.SourceSansBold
 title.Parent = panel
 
+-- ScrollingFrame внутри панели для прокрутки кнопок
+local panelScroll = Instance.new("ScrollingFrame")
+panelScroll.Name = "PanelScroll"
+panelScroll.Size = UDim2.new(1, 0, 0.96, 0)
+panelScroll.Position = UDim2.new(0, 0, 0.04, 0)
+panelScroll.BackgroundTransparency = 1
+panelScroll.BorderSizePixel = 0
+panelScroll.ScrollBarThickness = 6
+panelScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+panelScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+panelScroll.Parent = panel
+
 local uiListLayout = Instance.new("UIListLayout")
-uiListLayout.Parent = panel
+uiListLayout.Parent = panelScroll
 uiListLayout.SortOrder = Enum.SortOrder.Name
-uiListLayout.Padding = UDim.new(0, 2)
+uiListLayout.Padding = UDim.new(0.005, 0)
 
 -- Создаем contentFrame справа от панели
 local contentFrame = Instance.new("Frame")
-contentFrame.Size = UDim2.new(0, 220, 0, 200)
-contentFrame.Position = UDim2.new(0, 210, 0, 10)
+contentFrame.Size = UDim2.new(0.12, 0, 0.28, 0)
+contentFrame.Position = UDim2.new(0.14, 0, 0.05, 0)
 contentFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 contentFrame.BorderSizePixel = 2
 contentFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
 contentFrame.Parent = screenGui
 
--- Добавляем ScrollingFrame внутрь contentFrame для прокрутки
+-- Добавляем ScrollFrame для прокрутки контента
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Size = UDim2.new(1, 0, 1, 0)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
 scrollFrame.Parent = contentFrame
-scrollFrame.ScrollBarThickness = 8
+scrollFrame.ScrollBarThickness = 6
 scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 local contentLayout = Instance.new("UIListLayout")
 contentLayout.Parent = scrollFrame
 contentLayout.SortOrder = Enum.SortOrder.Name
-contentLayout.Padding = UDim.new(0, 2)
+contentLayout.Padding = UDim.new(0.005, 0)
 
-local currentFolderConnection -- переменная для хранения соединения
-
-local function updatePanelHeight()
-    local totalHeight = 0
-    for _, child in pairs(panel:GetChildren()) do
-        if child:IsA("GuiObject") then
-            totalHeight = totalHeight + child.Size.Y.Offset + uiListLayout.Padding.Offset
-        end
-    end
-    panel.Size = UDim2.new(0, 200, 0, totalHeight)
-end
-
-local function updateContentHeight()
-    local totalHeight = 0
-    for _, child in pairs(scrollFrame:GetChildren()) do
-        if child:IsA("GuiObject") then
-            totalHeight = totalHeight + child.Size.Y.Offset + contentLayout.Padding.Offset
-        end
-    end
-    contentFrame.Size = UDim2.new(0, 220, 0, math.min(totalHeight, 200))
-end
+local currentFolderConnection -- переменная для соединения
 
 -- Перемещение панели
 local dragging = false
 local dragOffset = Vector2.new()
 
 panel.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragOffset = Vector2.new(input.Position.X - panel.AbsolutePosition.X, input.Position.Y - panel.AbsolutePosition.Y)
-    end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragOffset = Vector2.new(input.Position.X - panel.AbsolutePosition.X, input.Position.Y - panel.AbsolutePosition.Y)
+	end
 end)
 
 panel.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local newPosX = input.Position.X - dragOffset.X
-        local newPosY = input.Position.Y - dragOffset.Y
-        local screenSize = workspace.CurrentCamera.ViewportSize
-        newPosX = math.clamp(newPosX, 0, screenSize.X - panel.Size.X.Offset)
-        newPosY = math.clamp(newPosY, 0, screenSize.Y - panel.Size.Y.Offset)
-        panel.Position = UDim2.new(0, newPosX, 0, newPosY)
-        -- Обновляем позицию contentFrame справа от панели
-        contentFrame.Position = UDim2.new(0, panel.Position.X.Offset + panel.Size.X.Offset + 10, 0, panel.Position.Y.Offset)
-    end
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local screenSize = workspace.CurrentCamera.ViewportSize
+		local newPosX = (input.Position.X - dragOffset.X) / screenSize.X
+		local newPosY = (input.Position.Y - dragOffset.Y) / screenSize.Y
+		newPosX = math.clamp(newPosX, 0, 1 - panel.Size.X.Scale)
+		newPosY = math.clamp(newPosY, 0, 1 - panel.Size.Y.Scale)
+		panel.Position = UDim2.new(newPosX, 0, newPosY, 0)
+		-- Обновляем позицию contentFrame справа от панели
+		contentFrame.Position = UDim2.new(newPosX + panel.Size.X.Scale + 0.01, 0, newPosY, 0)
+	end
 end)
 
 local function setContentFramePosition()
-    contentFrame.Position = UDim2.new(0, panel.Position.X.Offset + panel.Size.X.Offset + 10, 0, panel.Position.Y.Offset)
+	contentFrame.Position = UDim2.new(panel.Position.X.Scale + panel.Size.X.Scale + 0.01, 0, panel.Position.Y.Scale, 0)
 end
 
 setContentFramePosition()
 
 local function clearContent()
-    for _, child in pairs(scrollFrame:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
-        end
-    end
+	for _, child in pairs(scrollFrame:GetChildren()) do
+		if child:IsA("GuiObject") then
+			child:Destroy()
+		end
+	end
 end
 
 local function getColorByType(obj)
-    if obj:IsA("Part") then
-        return Color3.fromRGB(160, 160, 160)
-    elseif obj:IsA("MeshPart") then
-        return Color3.fromRGB(80, 80, 80)
-    elseif obj:IsA("UnionOperation") then
-        return Color3.fromRGB(0, 255, 0)
-    elseif obj:IsA("Model") then
-        return Color3.fromRGB(255, 0, 255)
-    elseif obj:IsA("Folder") then
-        return Color3.fromRGB(255, 165, 0)
-    else
-        return Color3.fromRGB(0, 0, 255)
-    end
+	if obj:IsA("Part") then
+		return Color3.fromRGB(160, 160, 160)
+	elseif obj:IsA("MeshPart") then
+		return Color3.fromRGB(80, 80, 80)
+	elseif obj:IsA("UnionOperation") then
+		return Color3.fromRGB(0, 255, 0)
+	elseif obj:IsA("Model") then
+		return Color3.fromRGB(255, 0, 255)
+	elseif obj:IsA("Folder") then
+		return Color3.fromRGB(255, 165, 0)
+	else
+		return Color3.fromRGB(0, 0, 255)
+	end
 end
 
 local function getLabelTextByType(obj)
-    if obj:IsA("Part") then
-        return "[Part]"
-    elseif obj:IsA("MeshPart") then
-        return "[MeshPart]"
-    elseif obj:IsA("UnionOperation") then
-        return "[Union]"
-    elseif obj:IsA("Model") then
-        return "[Model]"
-    elseif obj:IsA("Folder") then
-        return "[Folder]"
-    else
-        return "[Object]"
-    end
+	if obj:IsA("Part") then
+		return "[Part]"
+	elseif obj:IsA("MeshPart") then
+		return "[MeshPart]"
+	elseif obj:IsA("UnionOperation") then
+		return "[Union]"
+	elseif obj:IsA("Model") then
+		return "[Model]"
+	elseif obj:IsA("Folder") then
+		return "[Folder]"
+	else
+		return "[Object]"
+	end
 end
 
 local function showObjectContents(obj)
-    if currentFolderConnection then
-        currentFolderConnection:Disconnect()
-        currentFolderConnection = nil
-    end
+	if currentFolderConnection then
+		currentFolderConnection:Disconnect()
+		currentFolderConnection = nil
+	end
 
-    clearContent()
+	clearContent()
 
-    local function updateContent()
-        clearContent()
+	local function updateContent()
+		clearContent()
 
-        local children = {}
-        local folderCount = {}
+		local children = {}
+		local folderCount = {}
 
-        for _, child in pairs(obj:GetChildren()) do
-            if child:IsA("Folder") then
-                folderCount[child.Name] = (folderCount[child.Name] or 0) + 1
-            else
-                children[child.Name] = (children[child.Name] or 0) + 1
-            end
-        end
+		for _, child in pairs(obj:GetChildren()) do
+			if child:IsA("Folder") then
+				folderCount[child.Name] = (folderCount[child.Name] or 0) + 1
+			else
+				children[child.Name] = (children[child.Name] or 0) + 1
+			end
+		end
 
-        -- вывод файлов
-        for name, count in pairs(children) do
-            local label = Instance.new("TextLabel")
-            label.Size = UDim2.new(1, -4, 0, 20)
-            label.Text = name .. (count > 1 and (" x" .. count) or "")
-            label.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-            label.TextColor3 = Color3.fromRGB(255, 255, 255)
-            label.TextSize = 13
-            label.TextXAlignment = Enum.TextXAlignment.Left
-            label.Parent = scrollFrame
-        end
+		-- вывод файлов
+		for name, count in pairs(children) do
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.new(1, 0, 0.15, 0)
+			label.Text = name .. (count > 1 and (" x" .. count) or "")
+			label.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+			label.TextColor3 = Color3.fromRGB(255, 255, 255)
+			label.TextScaled = true
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.Font = Enum.Font.SourceSans
+			label.Parent = scrollFrame
 
-        -- вывод папок
-        for name, count in pairs(folderCount) do
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, -4, 0, 20)
-            btn.Text = "[Folder] " .. name .. (count > 1 and (" x" .. count) or "")
-            btn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
-            btn.TextColor3 = Color3.fromRGB(0, 0, 0)
-            btn.TextSize = 13
-            btn.Parent = scrollFrame
+			local padding = Instance.new("UIPadding")
+			padding.PaddingLeft = UDim.new(0.01, 0)
+			padding.PaddingRight = UDim.new(0.01, 0)
+			padding.PaddingTop = UDim.new(0.003, 0)
+			padding.PaddingBottom = UDim.new(0.003, 0)
+			padding.Parent = label
+		end
 
-            btn.MouseButton1Click:Connect(function()
-                local subFolder = obj:FindFirstChild(name)
-                if subFolder and subFolder:IsA("Folder") then
-                    showObjectContents(subFolder)
-                end
-            end)
-        end
+		-- вывод папок
+		for name, count in pairs(folderCount) do
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1, 0, 0.15, 0)
+			btn.Text = "[Folder] " .. name .. (count > 1 and (" x" .. count) or "")
+			btn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+			btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+			btn.TextScaled = true
+			btn.Font = Enum.Font.SourceSans
+			btn.Parent = scrollFrame
 
-        updateContentHeight()
-    end
+			local btnPadding = Instance.new("UIPadding")
+			btnPadding.PaddingLeft = UDim.new(0.01, 0)
+			btnPadding.PaddingRight = UDim.new(0.01, 0)
+			btnPadding.PaddingTop = UDim.new(0.003, 0)
+			btnPadding.PaddingBottom = UDim.new(0.003, 0)
+			btnPadding.Parent = btn
 
-    updateContent()
+			btn.MouseButton1Click:Connect(function()
+				local subFolder = obj:FindFirstChild(name)
+				if subFolder and subFolder:IsA("Folder") then
+					showObjectContents(subFolder)
+				end
+			end)
+		end
+	end
 
-    currentFolderConnection = obj.ChildAdded:Connect(function()
-        updateContent()
-    end)
-    obj.ChildRemoved:Connect(function()
-        updateContent()
-    end)
+	updateContent()
+
+	currentFolderConnection = obj.ChildAdded:Connect(function()
+		updateContent()
+	end)
+	obj.ChildRemoved:Connect(function()
+		updateContent()
+	end)
 end
 
 local function createObjectButton(obj, displayName)
-    local name = displayName or obj.Name
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, -4, 0, 20)
-    btn.Text = name
-    btn.BackgroundColor3 = getColorByType(obj)
-    btn.TextColor3 = Color3.fromRGB(0, 0, 0)
-    btn.TextSize = 13
-    btn.Parent = panel
+	local name = displayName or obj.Name
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0.15, 0)
+	btn.Text = name
+	btn.BackgroundColor3 = getColorByType(obj)
+	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+	btn.TextScaled = true
+	btn.Font = Enum.Font.SourceSans
+	btn.Parent = panelScroll
 
-    btn.MouseButton1Click:Connect(function()
-        showObjectContents(obj)
-        wait()
-        updatePanelHeight()
-    end)
+	local btnPadding = Instance.new("UIPadding")
+	btnPadding.PaddingLeft = UDim.new(0.01, 0)
+	btnPadding.PaddingRight = UDim.new(0.01, 0)
+	btnPadding.PaddingTop = UDim.new(0.003, 0)
+	btnPadding.PaddingBottom = UDim.new(0.003, 0)
+	btnPadding.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		showObjectContents(obj)
+	end)
 end
 
 local function scanWorkspace()
-    -- очищаем старые кнопки
-    for _, child in pairs(panel:GetChildren()) do
-        if child:IsA("TextButton") and child ~= title then
-            child:Destroy()
-        end
-    end
+	-- очищаем старые кнопки
+	for _, child in pairs(panelScroll:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
 
-    -- ищем все Part, MeshPart, Model, Folder
-    for _, obj in pairs(workspace:GetChildren()) do
-        if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
-            createObjectButton(obj)
-        end
-    end
-    updatePanelHeight()
+	-- ищем все Part, MeshPart, Model, Folder
+	for _, obj in pairs(workspace:GetChildren()) do
+		if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
+			createObjectButton(obj)
+		end
+	end
 end
 
 scanWorkspace()
