@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local workspace = game:GetService("Workspace")
@@ -253,6 +252,135 @@ local function createObjectButton(obj, displayName)
 end
 
 local function scanWorkspace()
+
+-- === Функция показа названия объекта при касании ===
+local touchGui = Instance.new("ScreenGui")
+touchGui.Name = "TouchNameGUI"
+touchGui.Parent = playerGui
+
+local touchLabel = Instance.new("TextLabel")
+touchLabel.Name = "TouchLabel"
+touchLabel.Size = UDim2.new(0, 300, 0, 50)
+touchLabel.Position = UDim2.new(0.5, -150, 0.85, 0)
+touchLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+touchLabel.BackgroundTransparency = 0.3
+touchLabel.BorderSizePixel = 2
+touchLabel.BorderColor3 = Color3.fromRGB(100, 100, 100)
+touchLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+touchLabel.TextScaled = true
+touchLabel.Font = Enum.Font.SourceSansBold
+touchLabel.Text = ""
+touchLabel.Visible = false
+touchLabel.Parent = touchGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = touchLabel
+
+local padding = Instance.new("UIPadding")
+padding.PaddingLeft = UDim.new(0, 10)
+padding.PaddingRight = UDim.new(0, 10)
+padding.Parent = touchLabel
+
+local touchDebounce = false
+local touchHideVersion = 0
+
+local function getObjectName(part)
+	-- Если часть принадлежит модели, показываем название модели
+	local parent = part.Parent
+	if parent and parent:IsA("Model") and parent ~= workspace then
+		return parent.Name .. " [Model]"
+	elseif parent and parent:IsA("Folder") and parent ~= workspace then
+		return parent.Name .. " [Folder]"
+	else
+		local typeLabel = getLabelTextByType(part)
+		return part.Name .. " " .. typeLabel
+	end
+end
+
+local function showTouchName(objectName)
+	touchLabel.Text = objectName
+	touchLabel.Visible = true
+
+	-- Плавное появление
+	touchLabel.BackgroundTransparency = 1
+	touchLabel.TextTransparency = 1
+
+	for i = 1, 10 do
+		touchLabel.BackgroundTransparency = 1 - (i / 10) * 0.7
+		touchLabel.TextTransparency = 1 - (i / 10)
+		task.wait(0.02)
+	end
+
+	-- Сброс таймера скрытия через версию
+	touchHideVersion = touchHideVersion + 1
+	local currentVersion = touchHideVersion
+
+	task.delay(2, function()
+		-- Если версия изменилась, значит был новый тач — не скрываем
+		if touchHideVersion ~= currentVersion then return end
+
+		-- Плавное исчезновение
+		for i = 1, 10 do
+			if touchHideVersion ~= currentVersion then return end
+			touchLabel.BackgroundTransparency = 0.3 + (i / 10) * 0.7
+			touchLabel.TextTransparency = i / 10
+			task.wait(0.02)
+		end
+		touchLabel.Visible = false
+	end)
+end
+
+local function onPartTouched(part)
+	if touchDebounce then return end
+
+	local character = player.Character
+	if not character then return end
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	-- Проверяем, что коснулся именно персонаж игрока
+	local touchingPart = nil
+	for _, touching in part:GetTouchingParts() do
+		if touching:IsDescendantOf(character) then
+			touchingPart = touching
+			break
+		end
+	end
+
+	if not touchingPart then return end
+
+	touchDebounce = true
+	local objectName = getObjectName(part)
+	showTouchName(objectName)
+
+	task.delay(1.5, function()
+		touchDebounce = false
+	end)
+end
+
+local function setupTouchForPart(part)
+	if part:IsA("BasePart") and not part:IsA("Terrain") then
+		part.Touched:Connect(function(otherPart)
+			local character = player.Character
+			if not character then return end
+			if otherPart:IsDescendantOf(character) then
+				onPartTouched(part)
+			end
+		end)
+	end
+end
+
+-- Подключаем касание для всех существующих частей
+for _, descendant in workspace:GetDescendants() do
+	setupTouchForPart(descendant)
+end
+
+-- Подключаем касание для новых частей, добавленных позже
+workspace.DescendantAdded:Connect(function(descendant)
+	setupTouchForPart(descendant)
+end)
 	-- очищаем старые кнопки
 	for _, child in pairs(panelScroll:GetChildren()) do
 		if child:IsA("TextButton") then
