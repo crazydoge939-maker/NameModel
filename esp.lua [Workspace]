@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local workspace = game:GetService("Workspace")
@@ -10,7 +11,7 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "FolderExplorerGUI"
 screenGui.Parent = playerGui
 
--- Создаем основную панель для кнопок
+-- Основная панель для объектов
 local panel = Instance.new("Frame")
 panel.Size = UDim2.new(0.1, 0, 0.28, 0)
 panel.Position = UDim2.new(0.01, 0, 0.05, 0)
@@ -30,7 +31,6 @@ title.TextScaled = true
 title.Font = Enum.Font.SourceSansBold
 title.Parent = panel
 
--- ScrollingFrame внутри панели для прокрутки кнопок
 local panelScroll = Instance.new("ScrollingFrame")
 panelScroll.Name = "PanelScroll"
 panelScroll.Size = UDim2.new(1, 0, 0.96, 0)
@@ -47,7 +47,7 @@ uiListLayout.Parent = panelScroll
 uiListLayout.SortOrder = Enum.SortOrder.Name
 uiListLayout.Padding = UDim.new(0.005, 0)
 
--- Создаем contentFrame справа от панели
+-- Создаем правую панель для данных выбранного объекта
 local contentFrame = Instance.new("Frame")
 contentFrame.Size = UDim2.new(0.12, 0, 0.28, 0)
 contentFrame.Position = UDim2.new(0.14, 0, 0.05, 0)
@@ -56,7 +56,6 @@ contentFrame.BorderSizePixel = 2
 contentFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
 contentFrame.Parent = screenGui
 
--- Добавляем ScrollFrame для прокрутки контента
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Size = UDim2.new(1, 0, 1, 0)
 scrollFrame.BackgroundTransparency = 1
@@ -73,10 +72,10 @@ contentLayout.Padding = UDim.new(0.005, 0)
 
 local currentFolderConnection -- переменная для соединения
 
--- Перемещение панели
 local dragging = false
 local dragOffset = Vector2.new()
 
+-- Перемещение панели
 panel.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = true
@@ -98,19 +97,12 @@ UserInputService.InputChanged:Connect(function(input)
 		newPosX = math.clamp(newPosX, 0, 1 - panel.Size.X.Scale)
 		newPosY = math.clamp(newPosY, 0, 1 - panel.Size.Y.Scale)
 		panel.Position = UDim2.new(newPosX, 0, newPosY, 0)
-		-- Обновляем позицию contentFrame справа от панели
 		contentFrame.Position = UDim2.new(newPosX + panel.Size.X.Scale + 0.01, 0, newPosY, 0)
 	end
 end)
 
-local function setContentFramePosition()
-	contentFrame.Position = UDim2.new(panel.Position.X.Scale + panel.Size.X.Scale + 0.01, 0, panel.Position.Y.Scale, 0)
-end
-
-setContentFramePosition()
-
-local function clearContent()
-	for _, child in pairs(scrollFrame:GetChildren()) do
+local function clearContent(frame)
+	for _, child in pairs(frame:GetChildren()) do
 		if child:IsA("GuiObject") then
 			child:Destroy()
 		end
@@ -119,7 +111,7 @@ end
 
 local function getColorByType(obj)
 	if obj:IsA("Part") then
-		return Color3.fromRGB(160, 160, 160)
+		return Color3.fromRGB(255, 255, 255)
 	elseif obj:IsA("MeshPart") then
 		return Color3.fromRGB(80, 80, 80)
 	elseif obj:IsA("UnionOperation") then
@@ -149,102 +141,162 @@ local function getLabelTextByType(obj)
 	end
 end
 
-local function showObjectContents(obj)
-	if currentFolderConnection then
-		currentFolderConnection:Disconnect()
-		currentFolderConnection = nil
-	end
-
-	clearContent()
-
-	local function updateContent()
-		clearContent()
-
-		local children = {}
-		local folderCount = {}
-
-		for _, child in pairs(obj:GetChildren()) do
-			if child:IsA("Folder") then
-				folderCount[child.Name] = (folderCount[child.Name] or 0) + 1
-			else
-				children[child.Name] = (children[child.Name] or 0) + 1
-			end
-		end
-
-		-- вывод файлов
-		for name, count in pairs(children) do
-			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(1, 0, 0.15, 0)
-			label.Text = name .. (count > 1 and (" x" .. count) or "")
-			label.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-			label.TextColor3 = Color3.fromRGB(255, 255, 255)
-			label.TextScaled = true
-			label.TextXAlignment = Enum.TextXAlignment.Left
-			label.Font = Enum.Font.SourceSans
-			label.Parent = scrollFrame
-
-			local padding = Instance.new("UIPadding")
-			padding.PaddingLeft = UDim.new(0.01, 0)
-			padding.PaddingRight = UDim.new(0.01, 0)
-			padding.PaddingTop = UDim.new(0.003, 0)
-			padding.PaddingBottom = UDim.new(0.003, 0)
-			padding.Parent = label
-		end
-
-		-- вывод папок
-		for name, count in pairs(folderCount) do
-			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(1, 0, 0.15, 0)
-			btn.Text = "[Folder] " .. name .. (count > 1 and (" x" .. count) or "")
-			btn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
-			btn.TextColor3 = Color3.fromRGB(0, 0, 0)
-			btn.TextScaled = true
-			btn.Font = Enum.Font.SourceSans
-			btn.Parent = scrollFrame
-
-			local btnPadding = Instance.new("UIPadding")
-			btnPadding.PaddingLeft = UDim.new(0.01, 0)
-			btnPadding.PaddingRight = UDim.new(0.01, 0)
-			btnPadding.PaddingTop = UDim.new(0.003, 0)
-			btnPadding.PaddingBottom = UDim.new(0.003, 0)
-			btnPadding.Parent = btn
-
-			btn.MouseButton1Click:Connect(function()
-				local subFolder = obj:FindFirstChild(name)
-				if subFolder and subFolder:IsA("Folder") then
-					showObjectContents(subFolder)
-				end
-			end)
-		end
-	end
-
-	updateContent()
-
-	currentFolderConnection = obj.ChildAdded:Connect(function()
-		updateContent()
-	end)
-	obj.ChildRemoved:Connect(function()
-		updateContent()
-	end)
-end
-
-local function createObjectButton(obj, displayName)
-	local name = displayName or obj.Name
+local function createObjectButton(obj)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, 0, 0.15, 0)
-	btn.Text = name
+	btn.Text = obj.Name
 	btn.BackgroundColor3 = getColorByType(obj)
 	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
 	btn.TextScaled = true
 	btn.Font = Enum.Font.SourceSans
 	btn.Parent = panelScroll
 
-	local btnPadding = Instance.new("UIPadding")
-	btnPadding.PaddingLeft = UDim.new(0.01, 0)
-	btnPadding.PaddingRight = UDim.new(0.01, 0)
-	btnPadding.PaddingTop = UDim.new(0.003, 0)
-	btnPadding.PaddingBottom = UDim.new(0.003, 0)
-	btnPadding.Parent = btn
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0.01, 0)
+	padding.PaddingRight = UDim.new(0.01, 0)
+	padding.PaddingTop = UDim.new(0.003, 0)
+	padding.PaddingBottom = UDim.new(0.003, 0)
+	padding.Parent = btn
+
+	btn.MouseButton1Click:Connect(function()
+		showObjectContents(obj)
+	end)
+end
+
+local function showObjectContents(obj)
+	if currentFolderConnection then
+		currentFolderConnection:Disconnect()
+		currentFolderConnection = nil
+	end
+
+	clearContent(scrollFrame)
+
+	-- Отображение информации о выбранном объекте
+	local infoLabel = Instance.new("TextLabel")
+	infoLabel.Size = UDim2.new(1, 0, 0.05, 0)
+	infoLabel.Text = "Объект: " .. obj.Name
+	infoLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	infoLabel.TextColor3 = Color3.fromRGB(255,255,255)
+	infoLabel.TextScaled = true
+	infoLabel.Font = Enum.Font.SourceSansBold
+	infoLabel.Parent = scrollFrame
+
+	-- Создаем отображение цвета объекта
+	local colorFrame = Instance.new("Frame")
+	colorFrame.Size = UDim2.new(1, -4, 0.1, 0)
+	colorFrame.Position = UDim2.new(0, 2, 0, 0)
+	colorFrame.BackgroundColor3 = getColorByType(obj)
+	colorFrame.BorderSizePixel = 1
+	colorFrame.BorderColor3 = Color3.fromRGB(100, 100, 100)
+	colorFrame.Parent = scrollFrame
+
+	local labelColor = Instance.new("TextLabel")
+	labelColor.Size = UDim2.new(1, 0, 1, 0)
+	labelColor.BackgroundTransparency = 1
+	labelColor.TextColor3 = Color3.fromRGB(255, 255, 255)
+	labelColor.TextScaled = true
+	labelColor.Font = Enum.Font.SourceSansBold
+	labelColor.Text = "Цвет объекта"
+	labelColor.Parent = colorFrame
+
+	local colorIndicator = Instance.new("Frame")
+	colorIndicator.Size = UDim2.new(0.2, 0, 1, 0)
+	colorIndicator.Position = UDim2.new(0.8, -2, 0, 0)
+	colorIndicator.BackgroundColor3 = getColorByType(obj)
+	colorIndicator.BorderSizePixel = 1
+	colorIndicator.BorderColor3 = Color3.fromRGB(255, 255, 255)
+	colorIndicator.Parent = colorFrame
+
+	-- Обновлять цвет при изменении объекта (если необходимо)
+	local function updateColor()
+		local newColor = getColorByType(obj)
+		colorFrame.BackgroundColor3 = newColor
+		colorIndicator.BackgroundColor3 = newColor
+	end
+
+	-- Создаем список дочерних объектов с их цветами
+	local function showChildren(obj)
+		clearContent(scrollFrame)
+		-- Информация о родительском объекте
+		local parentLabel = Instance.new("TextLabel")
+		parentLabel.Size = UDim2.new(1, 0, 0.05, 0)
+		parentLabel.Text = "Дочерние объекты"
+		parentLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+		parentLabel.TextColor3 = Color3.fromRGB(255,255,255)
+		parentLabel.TextScaled = true
+		parentLabel.Font = Enum.Font.SourceSansBold
+		parentLabel.Parent = scrollFrame
+
+		-- Обновляем цвет
+		updateColor()
+
+		local function addChildEntry(child)
+			local childFrame = Instance.new("Frame")
+			childFrame.Size = UDim2.new(1, 0, 0.15, 0)
+			childFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+			childFrame.Parent = scrollFrame
+
+			local label = Instance.new("TextLabel")
+			label.Size = UDim2.new(0.8, 0, 1, 0)
+			label.Position = UDim2.new(0, 2, 0, 0)
+			label.BackgroundTransparency = 1
+			label.TextColor3 = Color3.fromRGB(255,255,255)
+			label.TextScaled = true
+			label.Font = Enum.Font.SourceSans
+			label.Text = child.Name .. " " .. getLabelTextByType(child)
+			label.Parent = childFrame
+
+			local colorBox = Instance.new("Frame")
+			colorBox.Size = UDim2.new(0.2, -4, 1, 0)
+			colorBox.Position = UDim2.new(0.8, 2, 0, 0)
+			colorBox.BackgroundColor3 = getColorByType(child)
+			colorBox.BorderSizePixel = 1
+			colorBox.BorderColor3 = Color3.fromRGB(255,255,255)
+			colorBox.Parent = childFrame
+		end
+
+		local children = {}
+		for _, c in pairs(obj:GetChildren()) do
+			table.insert(children, c)
+		end
+
+		for _, c in pairs(children) do
+			addChildEntry(c)
+		end
+	end
+
+	showChildren(obj)
+
+	-- Подписка на изменения внутри объекта
+	if currentFolderConnection then
+		currentFolderConnection:Disconnect()
+		currentFolderConnection = nil
+	end
+
+	currentFolderConnection = obj.ChildAdded:Connect(function()
+		showChildren(obj)
+	end)
+	obj.ChildRemoved:Connect(function()
+		showChildren(obj)
+	end)
+end
+
+local function createObjectButton(obj)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, 0, 0.15, 0)
+	btn.Text = obj.Name
+	btn.BackgroundColor3 = getColorByType(obj)
+	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+	btn.TextScaled = true
+	btn.Font = Enum.Font.SourceSans
+	btn.Parent = panelScroll
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0.01, 0)
+	padding.PaddingRight = UDim.new(0.01, 0)
+	padding.PaddingTop = UDim.new(0.003, 0)
+	padding.PaddingBottom = UDim.new(0.003, 0)
+	padding.Parent = btn
 
 	btn.MouseButton1Click:Connect(function()
 		showObjectContents(obj)
@@ -252,160 +304,32 @@ local function createObjectButton(obj, displayName)
 end
 
 local function scanWorkspace()
-
--- === Функция показа названия объекта при касании ===
-local touchGui = Instance.new("ScreenGui")
-touchGui.Name = "TouchNameGUI"
-touchGui.Parent = playerGui
-
-local touchLabel = Instance.new("TextLabel")
-touchLabel.Name = "TouchLabel"
-touchLabel.Size = UDim2.new(0.242, 0, 0.2, 0)
-touchLabel.Position = UDim2.new(0.38, 0, 0.7, 0)
-touchLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-touchLabel.BackgroundTransparency = 0.3
-touchLabel.BorderSizePixel = 2
-touchLabel.BorderColor3 = Color3.fromRGB(100, 100, 100)
-touchLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-touchLabel.TextScaled = true
-touchLabel.TextWrapped = true
-touchLabel.Font = Enum.Font.SourceSansBold
-touchLabel.Text = ""
-touchLabel.Visible = false
-touchLabel.Parent = touchGui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 10)
-corner.Parent = touchLabel
-
-local padding = Instance.new("UIPadding")
-padding.PaddingLeft = UDim.new(0, 10)
-padding.PaddingRight = UDim.new(0, 10)
-padding.Parent = touchLabel
-
-local touchDebounce = false
-local touchHideVersion = 0
-
-local function getObjectPath(obj)
-	-- Строим путь от Workspace до объекта
-	local path = obj.Name
-	local current = obj.Parent
-	while current and current ~= workspace do
-		path = current.Name .. "/" .. path
-		current = current.Parent
-	end
-	return "Workspace/" .. path
-end
-
-local function getObjectName(part)
-	-- Если часть принадлежит модели, показываем название модели и путь
-	local parent = part.Parent
-	if parent and parent:IsA("Model") and parent ~= workspace then
-		return parent.Name .. " [Model]\n" .. getObjectPath(parent)
-	elseif parent and parent:IsA("Folder") and parent ~= workspace then
-		return parent.Name .. " [Folder]\n" .. getObjectPath(parent)
-	else
-		local typeLabel = getLabelTextByType(part)
-		return part.Name .. " " .. typeLabel .. "\n" .. getObjectPath(part)
-	end
-end
-
-local function showTouchName(objectName)
-	touchLabel.Text = objectName
-	touchLabel.Visible = true
-
-	-- Плавное появление
-	touchLabel.BackgroundTransparency = 1
-	touchLabel.TextTransparency = 1
-
-	for i = 1, 10 do
-		touchLabel.BackgroundTransparency = 1 - (i / 10) * 0.7
-		touchLabel.TextTransparency = 1 - (i / 10)
-		task.wait(0.02)
-	end
-
-	-- Сброс таймера скрытия через версию
-	touchHideVersion = touchHideVersion + 1
-	local currentVersion = touchHideVersion
-
-	task.delay(2, function()
-		-- Если версия изменилась, значит был новый тач — не скрываем
-		if touchHideVersion ~= currentVersion then return end
-
-		-- Плавное исчезновение
-		for i = 1, 10 do
-			if touchHideVersion ~= currentVersion then return end
-			touchLabel.BackgroundTransparency = 0.3 + (i / 10) * 0.7
-			touchLabel.TextTransparency = i / 10
-			task.wait(0.02)
-		end
-		touchLabel.Visible = false
-	end)
-end
-
-local function onPartTouched(part)
-	if touchDebounce then return end
-
-	local character = player.Character
-	if not character then return end
-
-	local hrp = character:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
-
-	-- Проверяем, что коснулся именно персонаж игрока
-	local touchingPart = nil
-	for _, touching in part:GetTouchingParts() do
-		if touching:IsDescendantOf(character) then
-			touchingPart = touching
-			break
-		end
-	end
-
-	if not touchingPart then return end
-
-	touchDebounce = true
-	local objectName = getObjectName(part)
-	showTouchName(objectName)
-
-	task.delay(1.5, function()
-		touchDebounce = false
-	end)
-end
-
-local function setupTouchForPart(part)
-	if part:IsA("BasePart") and not part:IsA("Terrain") then
-		part.Touched:Connect(function(otherPart)
-			local character = player.Character
-			if not character then return end
-			if otherPart:IsDescendantOf(character) then
-				onPartTouched(part)
+	-- Обновляем список объектов
+	local function refreshObjectList()
+		-- Очистка старых кнопок
+		for _, child in pairs(panelScroll:GetChildren()) do
+			if child:IsA("TextButton") then
+				child:Destroy()
 			end
-		end)
-	end
-end
-
--- Подключаем касание для всех существующих частей
-for _, descendant in workspace:GetDescendants() do
-	setupTouchForPart(descendant)
-end
-
--- Подключаем касание для новых частей, добавленных позже
-workspace.DescendantAdded:Connect(function(descendant)
-	setupTouchForPart(descendant)
-end)
-	-- очищаем старые кнопки
-	for _, child in pairs(panelScroll:GetChildren()) do
-		if child:IsA("TextButton") then
-			child:Destroy()
+		end
+		-- Добавляем все подходящие объекты
+		for _, obj in pairs(workspace:GetChildren()) do
+			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
+				createObjectButton(obj)
+			end
 		end
 	end
 
-	-- ищем все Part, MeshPart, Model, Folder
-	for _, obj in pairs(workspace:GetChildren()) do
-		if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
-			createObjectButton(obj)
-		end
-	end
+	-- Первый запуск
+	refreshObjectList()
+
+	-- Обновление при добавлении/удалении
+	workspace.ChildAdded:Connect(function()
+		refreshObjectList()
+	end)
+	workspace.ChildRemoved:Connect(function()
+		refreshObjectList()
+	end)
 end
 
 scanWorkspace()
