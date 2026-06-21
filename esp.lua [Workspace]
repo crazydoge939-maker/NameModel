@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local workspace = game:GetService("Workspace")
@@ -141,27 +140,7 @@ local function getLabelTextByType(obj)
 	end
 end
 
-local function createObjectButton(obj)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, 0, 0.15, 0)
-	btn.Text = obj.Name
-	btn.BackgroundColor3 = getColorByType(obj)
-	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
-	btn.TextScaled = true
-	btn.Font = Enum.Font.SourceSans
-	btn.Parent = panelScroll
-
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0.01, 0)
-	padding.PaddingRight = UDim.new(0.01, 0)
-	padding.PaddingTop = UDim.new(0.003, 0)
-	padding.PaddingBottom = UDim.new(0.003, 0)
-	padding.Parent = btn
-
-	btn.MouseButton1Click:Connect(function()
-		showObjectContents(obj)
-	end)
-end
+local showObjectContents -- forward declaration
 
 local function showObjectContents(obj)
 	if currentFolderConnection then
@@ -230,7 +209,7 @@ local function showObjectContents(obj)
 		-- Обновляем цвет
 		updateColor()
 
-		local function addChildEntry(child)
+		local function addChildEntry(child, count)
 			local childFrame = Instance.new("Frame")
 			childFrame.Size = UDim2.new(1, 0, 0.15, 0)
 			childFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
@@ -243,7 +222,11 @@ local function showObjectContents(obj)
 			label.TextColor3 = Color3.fromRGB(255,255,255)
 			label.TextScaled = true
 			label.Font = Enum.Font.SourceSans
-			label.Text = child.Name .. " " .. getLabelTextByType(child)
+			if count and count > 1 then
+				label.Text = child.Name .. " " .. getLabelTextByType(child) .. " ×" .. count
+			else
+				label.Text = child.Name .. " " .. getLabelTextByType(child)
+			end
 			label.Parent = childFrame
 
 			local colorBox = Instance.new("Frame")
@@ -251,7 +234,7 @@ local function showObjectContents(obj)
 			colorBox.Position = UDim2.new(0.8, 2, 0, 0)
 			colorBox.BackgroundColor3 = getColorByType(child)
 			colorBox.BorderSizePixel = 1
-			colorBox.BorderColor3 = Color3.fromRGB(255,255,255)
+			colorBox.BorderColor3 = Color3.fromRGB(255, 255, 255)
 			colorBox.Parent = childFrame
 		end
 
@@ -260,8 +243,25 @@ local function showObjectContents(obj)
 			table.insert(children, c)
 		end
 
+		-- Подсчёт одинаковых имён дочерних объектов
+		local nameCounts = {}
+		local nameFirstChild = {}
 		for _, c in pairs(children) do
-			addChildEntry(c)
+			local n = c.Name
+			nameCounts[n] = (nameCounts[n] or 0) + 1
+			if not nameFirstChild[n] then
+				nameFirstChild[n] = c
+			end
+		end
+
+		-- Отображаем сгруппированные записи
+		local displayedNames = {}
+		for _, c in pairs(children) do
+			local n = c.Name
+			if not displayedNames[n] then
+				displayedNames[n] = true
+				addChildEntry(nameFirstChild[n], nameCounts[n])
+			end
 		end
 	end
 
@@ -281,10 +281,14 @@ local function showObjectContents(obj)
 	end)
 end
 
-local function createObjectButton(obj)
+local function createObjectButton(obj, count)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, 0, 0.15, 0)
-	btn.Text = obj.Name
+	if count and count > 1 then
+		btn.Text = obj.Name .. " ×" .. count
+	else
+		btn.Text = obj.Name
+	end
 	btn.BackgroundColor3 = getColorByType(obj)
 	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
 	btn.TextScaled = true
@@ -312,10 +316,28 @@ local function scanWorkspace()
 				child:Destroy()
 			end
 		end
-		-- Добавляем все подходящие объекты
+		-- Подсчёт одинаковых имён объектов в Workspace
+		local nameCounts = {}
+		local nameFirstObj = {}
 		for _, obj in pairs(workspace:GetChildren()) do
 			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
-				createObjectButton(obj)
+				local n = obj.Name
+				nameCounts[n] = (nameCounts[n] or 0) + 1
+				if not nameFirstObj[n] then
+					nameFirstObj[n] = obj
+				end
+			end
+		end
+
+		-- Добавляем сгруппированные кнопки
+		local displayedNames = {}
+		for _, obj in pairs(workspace:GetChildren()) do
+			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
+				local n = obj.Name
+				if not displayedNames[n] then
+					displayedNames[n] = true
+					createObjectButton(nameFirstObj[n], nameCounts[n])
+				end
 			end
 		end
 	end
