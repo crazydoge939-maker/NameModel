@@ -203,6 +203,7 @@ local function getColorByType(obj)
 	elseif obj:IsA("Script") then return Color3.fromRGB(255, 255, 255)
 	elseif obj:IsA("LocalScript") then return Color3.fromRGB(0, 255, 255)
 	elseif obj:IsA("Humanoid") then return Color3.fromRGB(165, 55, 0)
+	elseif obj:IsA("ProximityPrompt") then return Color3.fromRGB(0, 0, 89)
 	else return Color3.fromRGB(0, 0, 0) end
 end
 
@@ -215,6 +216,7 @@ local function getLabelTextByType(obj)
 	elseif obj:IsA("Script") then return "[Script]"
 	elseif obj:IsA("LocalScript") then return "[LocalScipt]"
 	elseif obj:IsA("Humanoid") then return "[Humanoid]"
+	elseif obj:IsA("ProximityPrompt") then return "[ProximityPrompt]"
 	else return "[Object]" end
 end
 
