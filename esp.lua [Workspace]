@@ -64,7 +64,7 @@ contentFrame.Parent = screenGui
 
 -- Верхняя панель: кнопка назад + хлебные крошки
 local topBar = Instance.new("Frame")
-topBar.Size = UDim2.new(1, 0, 0.06, 0)
+topBar.Size = UDim2.new(1, 0, 0.15, 0)
 topBar.Position = UDim2.new(0, 0, 0, 0)
 topBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 topBar.BorderSizePixel = 0
@@ -95,12 +95,12 @@ breadcrumbPad.Parent = breadcrumbLabel
 breadcrumbLabel.Parent = topBar
 
 local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, 0, 0.94, 0)
-scrollFrame.Position = UDim2.new(0, 0, 0.06, 0)
+scrollFrame.Size = UDim2.new(1, 0, 0.8, 0)
+scrollFrame.Position = UDim2.new(0, 0, 0.15, 0)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
 scrollFrame.Parent = contentFrame
-scrollFrame.ScrollBarThickness = 6
+scrollFrame.ScrollBarThickness = 0
 scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
 scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
