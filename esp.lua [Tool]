@@ -1,351 +1,455 @@
 local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ===== UI Creation =====
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ToolInfoGui"
-screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = true
-screenGui.Parent = playerGui
+----------------------------------------------------------------
+-- Настройки
+----------------------------------------------------------------
+local WINDOW_WIDTH_SCALE = 0.22
+local WINDOW_HEIGHT_SCALE = 0.45
+local HEADER_HEIGHT = 0.04
+local ENTRY_HEIGHT = 28
+local PADDING = 4
+local FONT = Enum.Font.Code
+local FONT_SIZE = 13
+local TEXT_COLOR = Color3.fromRGB(210, 210, 210)
+local HEADER_COLOR = Color3.fromRGB(45, 45, 45)
+local ROW_EVEN = Color3.fromRGB(40, 40, 40)
+local ROW_ODD = Color3.fromRGB(48, 48, 48)
+local ACCENT = Color3.fromRGB(85, 170, 255)
+local CATEGORY_COLOR = Color3.fromRGB(85, 170, 255)
+local PROPERTY_NAME_WIDTH = 0.45
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 300, 0, 0)
-mainFrame.Position = UDim2.new(1, -320, 0.5, 0)
-mainFrame.AnchorPoint = Vector2.new(0, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.BorderSizePixel = 0
-mainFrame.Visible = false
-mainFrame.AutomaticSize = Enum.AutomaticSize.Y
-mainFrame.Parent = screenGui
-
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = mainFrame
-
-local stroke = Instance.new("UIStroke")
-stroke.Color = Color3.fromRGB(60, 60, 60)
-stroke.Thickness = 1
-stroke.Parent = mainFrame
-
-local padding = Instance.new("UIPadding")
-padding.PaddingTop = UDim.new(0, 8)
-padding.PaddingBottom = UDim.new(0, 8)
-padding.PaddingLeft = UDim.new(0, 10)
-padding.PaddingRight = UDim.new(0, 10)
-padding.Parent = mainFrame
-
-local layout = Instance.new("UIListLayout")
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Padding = UDim.new(0, 2)
-layout.Parent = mainFrame
-
--- ===== Helper Functions =====
+----------------------------------------------------------------
+-- Утилиты
+----------------------------------------------------------------
 local function formatValue(value)
-	if value == nil then
-		return "nil"
-	elseif typeof(value) == "string" then
+	local t = typeof(value)
+	if t == "string" then
 		return '"' .. value .. '"'
-	elseif typeof(value) == "boolean" then
+	elseif t == "boolean" then
 		return value and "true" or "false"
-	elseif typeof(value) == "number" then
-		if math.abs(value - math.round(value)) < 0.001 then
-			return tostring(math.round(value))
-		end
-		return string.format("%.3f", value)
-	elseif typeof(value) == "Color3" then
-		return string.format("%d, %d, %d", math.round(value.R * 255), math.round(value.G * 255), math.round(value.B * 255))
-	elseif typeof(value) == "Vector3" then
-		return string.format("%.1f, %.1f, %.1f", value.X, value.Y, value.Z)
-	elseif typeof(value) == "CFrame" then
-		local pos = value.Position
-		return string.format("%.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
-	elseif typeof(value) == "EnumItem" then
+	elseif t == "number" then
 		return tostring(value)
-	elseif typeof(value) == "BrickColor" then
-		return value.Name
-	elseif typeof(value) == "Instance" then
-		return value.Name
+	elseif t == "EnumItem" then
+		return tostring(value)
+	elseif t == "BrickColor" then
+		return tostring(value)
+	elseif t == "Color3" then
+		return string.format("%d, %d, %d", math.round(value.R * 255), math.round(value.G * 255), math.round(value.B * 255))
+	elseif t == "Vector3" then
+		return string.format("%.2f, %.2f, %.2f", value.X, value.Y, value.Z)
+	elseif t == "CFrame" then
+		local p = value.Position
+		return string.format("%.1f, %.1f, %.1f", p.X, p.Y, p.Z)
+	elseif t == "Instance" then
+		return value and value.Name or "nil"
+	elseif t == "table" then
+		return "{table}"
 	else
 		return tostring(value)
 	end
 end
 
-local function createSectionLabel(text, order)
-	local label = Instance.new("TextLabel")
-	label.Name = "Section_" .. text
-	label.Size = UDim2.new(1, 0, 0, 24)
-	label.BackgroundTransparency = 1
-	label.Text = "  " .. text:upper()
-	label.TextColor3 = Color3.fromRGB(180, 180, 180)
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 11
-	label.LayoutOrder = order
-	label.Parent = mainFrame
+local function getToolProperties(tool)
+	local props = {}
 
-	local bg = Instance.new("Frame")
-	bg.Size = UDim2.new(1, 0, 1, 0)
-	bg.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-	bg.BorderSizePixel = 0
-	bg.ZIndex = label.ZIndex - 1
-	bg.Parent = label
+	-- Основные свойства Tool
+	local toolProps = {
+		"Name", "ClassName", "Archivable", "CanBeDropped",
+		"Enabled", "Grip", "GripForward", "GripRight",
+		"GripUp", "GripPos", "ManualActivationOnly",
+		"RequiresHandle", "ToolTip",
+	}
 
-	return label
-end
-
-local function createPropertyRow(propName, propValue, order, valueColor)
-	local row = Instance.new("Frame")
-	row.Name = "Prop_" .. propName
-	row.Size = UDim2.new(1, 0, 0, 22)
-	row.BackgroundTransparency = 1
-	row.LayoutOrder = order
-	row.Parent = mainFrame
-
-	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "Name"
-	nameLabel.Size = UDim2.new(0.45, 0, 1, 0)
-	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = "  " .. propName
-	nameLabel.TextColor3 = Color3.fromRGB(160, 160, 160)
-	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nameLabel.Font = Enum.Font.Gotham
-	nameLabel.TextSize = 12
-	nameLabel.Parent = row
-
-	local valueLabel = Instance.new("TextLabel")
-	valueLabel.Name = "Value"
-	valueLabel.Size = UDim2.new(0.55, -4, 1, 0)
-	valueLabel.Position = UDim2.new(0.45, 4, 0, 0)
-	valueLabel.BackgroundTransparency = 1
-	valueLabel.Text = formatValue(propValue)
-	valueLabel.TextColor3 = valueColor or Color3.fromRGB(220, 220, 220)
-	valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-	valueLabel.Font = Enum.Font.Gotham
-	valueLabel.TextSize = 12
-	valueLabel.Parent = row
-
-	return row, valueLabel
-end
-
-local function createDescriptionBox(text, order)
-	local frame = Instance.new("Frame")
-	frame.Name = "DescriptionBox"
-	frame.Size = UDim2.new(1, 0, 0, 0)
-	frame.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
-	frame.BorderSizePixel = 0
-	frame.AutomaticSize = Enum.AutomaticSize.Y
-	frame.LayoutOrder = order
-	frame.Parent = mainFrame
-
-	local descCorner = Instance.new("UICorner")
-	descCorner.CornerRadius = UDim.new(0, 4)
-	descCorner.Parent = frame
-
-	local descPadding = Instance.new("UIPadding")
-	descPadding.PaddingTop = UDim.new(0, 6)
-	descPadding.PaddingBottom = UDim.new(0, 6)
-	descPadding.PaddingLeft = UDim.new(0, 8)
-	descPadding.PaddingRight = UDim.new(0, 8)
-	descPadding.Parent = frame
-
-	local label = Instance.new("TextLabel")
-	label.Name = "DescText"
-	label.Size = UDim2.new(1, 0, 0, 0)
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextColor3 = Color3.fromRGB(200, 200, 200)
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextYAlignment = Enum.TextYAlignment.Top
-	label.Font = Enum.Font.Gotham
-	label.TextSize = 12
-	label.AutomaticSize = Enum.AutomaticSize.Y
-	label.Parent = frame
-
-	return frame
-end
-
-local function createSeparator(order)
-	local sep = Instance.new("Frame")
-	sep.Name = "Separator"
-	sep.Size = UDim2.new(1, 0, 0, 1)
-	sep.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-	sep.BorderSizePixel = 0
-	sep.LayoutOrder = order
-	sep.Parent = mainFrame
-	return sep
-end
-
--- ===== Tool Properties Display =====
-local VALUE_COLORS = {
-	string = Color3.fromRGB(170, 210, 255),
-	boolean = Color3.fromRGB(255, 180, 100),
-	number = Color3.fromRGB(180, 255, 180),
-	Color3 = Color3.fromRGB(255, 150, 150),
-	Vector3 = Color3.fromRGB(255, 255, 150),
-	CFrame = Color3.fromRGB(255, 255, 150),
-	EnumItem = Color3.fromRGB(200, 180, 255),
-	BrickColor = Color3.fromRGB(255, 150, 150),
-}
-
-local TOOL_PROPERTIES = {
-	"ToolTip", "CanBeDropped", "Enabled", "RequiresHandle",
-	"CanCarryItem", "GripForward", "GripRight", "GripUp", "GripPos",
-}
-
-local function clearPanel()
-	for _, child in mainFrame:GetChildren() do
-		if child:IsA("GuiObject") then
-			child:Destroy()
-		end
-	end
-end
-
-local function showToolInfo(tool)
-	clearPanel()
-	mainFrame.Visible = true
-
-	local order = 0
-
-	-- Tool Name Header
-	local header = Instance.new("TextLabel")
-	header.Name = "Header"
-	header.Size = UDim2.new(1, 0, 0, 30)
-	header.BackgroundTransparency = 1
-	header.Text = tool.Name
-	header.TextColor3 = Color3.fromRGB(255, 255, 255)
-	header.TextXAlignment = Enum.TextXAlignment.Left
-	header.Font = Enum.Font.GothamBold
-	header.TextSize = 16
-	header.LayoutOrder = order
-	header.Parent = mainFrame
-	order = order + 1
-
-	-- Description
-	local desc = tool:GetAttribute("Description") or tool.ToolTip or ""
-	if desc ~= "" then
-		local descBox = createDescriptionBox(desc, order)
-		order = order + 1
-	end
-
-	createSeparator(order)
-	order = order + 1
-
-	-- Properties Section
-	createSectionLabel("Properties", order)
-	order = order + 1
-
-	for _, propName in TOOL_PROPERTIES do
-		local success, value = pcall(function()
-			return tool[propName]
-		end)
-		if success and value ~= nil then
-			local valueType = typeof(value)
-			local color = VALUE_COLORS[valueType] or Color3.fromRGB(220, 220, 220)
-			createPropertyRow(propName, value, order, color)
-			order = order + 1
+	for _, propName in toolProps do
+		local ok, value = pcall(function() return tool[propName] end)
+		if ok then
+			table.insert(props, {name = propName, value = value, category = "Tool"})
 		end
 	end
 
-	-- Attributes Section
-	local attrs = tool:GetAttributes()
-	local hasAttrs = false
-	for _ in pairs(attrs) do
-		hasAttrs = true
-		break
-	end
-
-	if hasAttrs then
-		createSeparator(order)
-		order = order + 1
-
-		createSectionLabel("Attributes", order)
-		order = order + 1
-
-		for attrName, attrValue in pairs(attrs) do
-			local valueType = typeof(attrValue)
-			local color = VALUE_COLORS[valueType] or Color3.fromRGB(220, 220, 220)
-			createPropertyRow(attrName, attrValue, order, color)
-			order = order + 1
-		end
-	end
-
-	-- Children Section
+	-- Объекты внутри Tool
 	local children = tool:GetChildren()
-	if #children > 0 then
-		createSeparator(order)
-		order = order + 1
-
-		createSectionLabel("Children", order)
-		order = order + 1
-
-		for _, child in children do
-			local childType = child.ClassName
-			local displayValue = child.Name .. "  [" .. childType .. "]"
-			createPropertyRow(child.Name, displayValue, order, Color3.fromRGB(180, 220, 255))
-			order = order + 1
-		end
+	table.sort(children, function(a, b) return a.Name:lower() < b.Name:lower() end)
+	for _, child in children do
+		table.insert(props, {
+			name = child.Name,
+			value = child.ClassName,
+			category = "Children",
+			isChild = true,
+		})
 	end
 
-	-- Tags Section
+	-- Атрибуты
+	local attrs = tool:GetAttributes()
+	local attrNames = {}
+	for name, _ in attrs do
+		table.insert(attrNames, name)
+	end
+	table.sort(attrNames)
+	for _, name in attrNames do
+		table.insert(props, {name = name, value = attrs[name], category = "Attributes"})
+	end
+
+	-- Теги
 	local tags = tool:GetTags()
 	if #tags > 0 then
-		createSeparator(order)
-		order = order + 1
+		table.sort(tags)
+		table.insert(props, {name = "Tags", value = table.concat(tags, ", "), category = "Attributes"})
+	end
 
-		createSectionLabel("Tags", order)
-		order = order + 1
+	-- Описание (если есть атрибут Description)
+	local desc = tool:GetAttribute("Description")
+	if desc then
+		table.insert(props, {name = "Description", value = desc, category = "Info", isDescription = true})
+	end
 
-		for _, tag in tags do
-			createPropertyRow("Tag", tag, order, Color3.fromRGB(255, 200, 150))
-			order = order + 1
+	return props
+end
+
+----------------------------------------------------------------
+-- Создание GUI
+----------------------------------------------------------------
+local function createPropertyRow(name, value, isCategory, isChild, isDescription, index)
+	local row = Instance.new("Frame")
+	row.Name = "Row_" .. name
+	row.BackgroundColor3 = (index % 2 == 0) and ROW_EVEN or ROW_ODD
+	row.BorderSizePixel = 0
+	row.Size = UDim2.new(1, 0, 0, ENTRY_HEIGHT)
+	row.AutomaticSize = Enum.AutomaticSize.None
+
+	if isCategory then
+		row.BackgroundColor3 = HEADER_COLOR
+
+		local label = Instance.new("TextLabel")
+		label.Name = "CategoryLabel"
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.new(1, -PADDING * 2, 1, 0)
+		label.Position = UDim2.new(0, PADDING, 0, 0)
+		label.Font = FONT
+		label.TextSize = FONT_SIZE
+		label.TextColor3 = CATEGORY_COLOR
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.Text = "  " .. name
+		label.Parent = row
+
+		local separator = Instance.new("Frame")
+		separator.Name = "Separator"
+		separator.Size = UDim2.new(1, 0, 0, 1)
+		separator.Position = UDim2.new(0, 0, 1, -1)
+		separator.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		separator.BorderSizePixel = 0
+		separator.Parent = row
+	else
+		-- Разделитель колонок
+		local divider = Instance.new("Frame")
+		divider.Name = "Divider"
+		divider.Size = UDim2.new(0, 1, 1, 0)
+		divider.Position = UDim2.new(PROPERTY_NAME_WIDTH, 0, 0, 0)
+		divider.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		divider.BorderSizePixel = 0
+		divider.Parent = row
+
+		-- Имя свойства
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Name = "NameLabel"
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Size = UDim2.new(PROPERTY_NAME_WIDTH, -PADDING * 2, 1, 0)
+		nameLabel.Position = UDim2.new(0, PADDING, 0, 0)
+		nameLabel.Font = FONT
+		nameLabel.TextSize = FONT_SIZE
+		nameLabel.TextColor3 = isChild and ACCENT or TEXT_COLOR
+		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLabel.Text = name
+		nameLabel.Parent = row
+
+		-- Значение свойства
+		local valueLabel = Instance.new("TextLabel")
+		valueLabel.Name = "ValueLabel"
+		valueLabel.BackgroundTransparency = 1
+		valueLabel.Size = UDim2.new(1 - PROPERTY_NAME_WIDTH, -PADDING * 2, 1, 0)
+		valueLabel.Position = UDim2.new(PROPERTY_NAME_WIDTH, PADDING, 0, 0)
+		valueLabel.Font = FONT
+		valueLabel.TextSize = FONT_SIZE
+		valueLabel.TextColor3 = isDescription and Color3.fromRGB(180, 220, 180) or Color3.fromRGB(255, 200, 100)
+		valueLabel.TextXAlignment = Enum.TextXAlignment.Left
+		valueLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		valueLabel.Text = formatValue(value)
+		valueLabel.Parent = row
+
+		-- Цветной индикатор для Color3
+		if typeof(value) == "Color3" then
+			local swatch = Instance.new("Frame")
+			swatch.Name = "ColorSwatch"
+			swatch.Size = UDim2.new(0, 14, 0, 14)
+			swatch.Position = UDim2.new(1 - PROPERTY_NAME_WIDTH, PADDING, 0.5, -7)
+			swatch.BackgroundColor3 = value
+			swatch.BorderSizePixel = 1
+			swatch.BorderColor3 = Color3.fromRGB(80, 80, 80)
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 3)
+			corner.Parent = swatch
+			swatch.Parent = row
+			valueLabel.Size = UDim2.new(1 - PROPERTY_NAME_WIDTH, -PADDING * 2 - 20, 1, 0)
+		end
+
+		-- Иконка для дочерних объектов
+		if isChild then
+			local icon = Instance.new("ImageLabel")
+			icon.Name = "ChildIcon"
+			icon.Size = UDim2.new(0, 14, 0, 14)
+			icon.Position = UDim2.new(0, PADDING, 0.5, -7)
+			icon.BackgroundTransparency = 1
+			icon.Image = "rbxassetid://6305984390"
+			icon.ImageColor3 = ACCENT
+			icon.Parent = row
+			nameLabel.Position = UDim2.new(0, PADDING + 18, 0, 0)
+			nameLabel.Size = UDim2.new(PROPERTY_NAME_WIDTH, -PADDING * 2 - 18, 1, 0)
 		end
 	end
+
+	return row
 end
 
-local function hideToolInfo()
-	mainFrame.Visible = false
-	clearPanel()
+local function buildToolInfoGui(tool)
+	-- ScreenGui
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "ToolInfoGui"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.IgnoreGuiInset = true
+
+	-- Главная рамка (окно)
+	local mainFrame = Instance.new("Frame")
+	mainFrame.Name = "MainFrame"
+	mainFrame.Size = UDim2.new(WINDOW_WIDTH_SCALE, 0, WINDOW_HEIGHT_SCALE, 0)
+	mainFrame.Position = UDim2.new(1 - WINDOW_WIDTH_SCALE - 0.01, 0, 0.08, 0)
+	mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	mainFrame.BorderSizePixel = 0
+	mainFrame.Parent = screenGui
+
+	local mainCorner = Instance.new("UICorner")
+	mainCorner.CornerRadius = UDim.new(0, 6)
+	mainCorner.Parent = mainFrame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(60, 60, 60)
+	stroke.Thickness = 1
+	stroke.Parent = mainFrame
+
+	-- Заголовок (перетаскиваемый)
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 32)
+	header.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	header.BorderSizePixel = 0
+	header.Parent = mainFrame
+
+	local headerCorner = Instance.new("UICorner")
+	headerCorner.CornerRadius = UDim.new(0, 6)
+	headerCorner.Parent = header
+
+	-- Скрываем нижние скругления заголовка
+	local headerFix = Instance.new("Frame")
+	headerFix.Size = UDim2.new(1, 0, 0, 10)
+	headerFix.Position = UDim2.new(0, 0, 1, -10)
+	headerFix.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	headerFix.BorderSizePixel = 0
+	headerFix.Parent = header
+
+	local iconLabel = Instance.new("ImageLabel")
+	iconLabel.Name = "ToolIcon"
+	iconLabel.Size = UDim2.new(0, 18, 0, 18)
+	iconLabel.Position = UDim2.new(0, 8, 0.5, -9)
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.Image = "rbxassetid://6305984390"
+	iconLabel.ImageColor3 = ACCENT
+	iconLabel.Parent = header
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Name = "Title"
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Size = UDim2.new(1, -70, 1, 0)
+	titleLabel.Position = UDim2.new(0, 30, 0, 0)
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.TextSize = 14
+	titleLabel.TextColor3 = Color3.fromRGB(230, 230, 230)
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.Text = tool.Name
+	titleLabel.Parent = header
+
+	-- Кнопка закрытия
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Name = "CloseButton"
+	closeBtn.Size = UDim2.new(0, 24, 0, 24)
+	closeBtn.Position = UDim2.new(1, -30, 0.5, -12)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+	closeBtn.Text = "X"
+	closeBtn.Font = Enum.Font.GothamBold
+	closeBtn.TextSize = 12
+	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeBtn.BorderSizePixel = 0
+	local closeCorner = Instance.new("UICorner")
+	closeCorner.CornerRadius = UDim.new(0, 4)
+	closeCorner.Parent = closeBtn
+	closeBtn.Parent = header
+
+	-- Контейнер для ScrollingFrame
+	local contentContainer = Instance.new("Frame")
+	contentContainer.Name = "ContentContainer"
+	contentContainer.Size = UDim2.new(1, 0, 1, -32)
+	contentContainer.Position = UDim2.new(0, 0, 0, 32)
+	contentContainer.BackgroundTransparency = 1
+	contentContainer.ClipsDescendants = true
+	local containerCorner = Instance.new("UICorner")
+	containerCorner.CornerRadius = UDim.new(0, 6)
+	containerCorner.Parent = contentContainer
+	contentContainer.Parent = mainFrame
+
+	-- ScrollingFrame
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Name = "PropertyScroll"
+	scrollFrame.Size = UDim2.new(1, 0, 1, 0)
+	scrollFrame.Position = UDim2.new(0, 0, 0, 0)
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.ScrollBarThickness = 6
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scrollFrame.Parent = contentContainer
+
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 0)
+	layout.Parent = scrollFrame
+
+	-- Заполняем свойства
+	local properties = getToolProperties(tool)
+	local currentCategory = ""
+	local rowIndex = 0
+	local order = 0
+
+	for _, prop in properties do
+		if prop.category ~= currentCategory then
+			currentCategory = prop.category
+			local catRow = createPropertyRow(currentCategory, nil, true, false, false, rowIndex)
+			catRow.LayoutOrder = order
+			catRow.Parent = scrollFrame
+			order += 1
+			rowIndex += 1
+		end
+
+		local row = createPropertyRow(prop.name, prop.value, false, prop.isChild, prop.isDescription, rowIndex)
+		row.LayoutOrder = order
+		row.Parent = scrollFrame
+		order += 1
+		rowIndex += 1
+	end
+
+	-- Перетаскивание
+	local UserInputService = game:GetService("UserInputService")
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+
+	header.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = mainFrame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			local delta = input.Position - dragStart
+			mainFrame.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+
+	-- Закрытие
+	closeBtn.MouseButton1Click:Connect(function()
+		screenGui:Destroy()
+	end)
+
+	return screenGui
 end
 
--- ===== Tool Detection =====
+----------------------------------------------------------------
+-- Отслеживание Tool в руках
+----------------------------------------------------------------
+local currentGui = nil
+
 local function onCharacterAdded(character)
+	local function onChildChanged(child)
+		if child:IsA("Tool") then
+			if child.Parent == character then
+				-- Tool экипирован
+				if currentGui then
+					currentGui:Destroy()
+					currentGui = nil
+				end
+				currentGui = buildToolInfoGui(child)
+				currentGui.Parent = playerGui
+			end
+		end
+	end
+
+	-- Отслеживаем экипировку (Tool добавляется в character)
 	character.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") then
-			showToolInfo(child)
-
-			-- Update when attributes change
-			child.AttributeChanged:Connect(function()
-				if mainFrame.Visible then
-					showToolInfo(child)
+			if currentGui then
+				currentGui:Destroy()
+					currentGui = nil
 				end
-			end)
+			currentGui = buildToolInfoGui(child)
+				currentGui.Parent = playerGui
 
-			-- Update when children change
-			child.ChildAdded:Connect(function()
-				if mainFrame.Visible then
-					showToolInfo(child)
-				end
-			end)
-			child.ChildRemoved:Connect(function()
-				if mainFrame.Visible then
-					showToolInfo(child)
+			-- Отслеживаем снятие этого Tool
+			local toolRef = child
+			child.AncestryChanged:Connect(function(_, newParent)
+				if newParent ~= character and currentGui then
+					currentGui:Destroy()
+					currentGui = nil
 				end
 			end)
 		end
 	end)
 
-	character.ChildRemoved:Connect(function(child)
+	-- Если Tool уже в руках при спавне
+	for _, child in character:GetChildren() do
 		if child:IsA("Tool") then
-			hideToolInfo()
+			if currentGui then
+				currentGui:Destroy()
+				currentGui = nil
+				end
+			currentGui = buildToolInfoGui(child)
+				currentGui.Parent = playerGui
+
+			child.AncestryChanged:Connect(function(_, newParent)
+				if newParent ~= character and currentGui then
+					currentGui:Destroy()
+					currentGui = nil
+				end
+			end)
+			break
 		end
-	end)
+	end
 end
 
 if player.Character then
-	onCharacterAdded(player.Character)
+	task.spawn(onCharacterAdded, player.Character)
 end
 player.CharacterAdded:Connect(onCharacterAdded)
