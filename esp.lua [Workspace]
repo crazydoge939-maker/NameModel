@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -94,9 +95,24 @@ breadcrumbPad.PaddingLeft = UDim.new(0.02, 0)
 breadcrumbPad.Parent = breadcrumbLabel
 breadcrumbLabel.Parent = topBar
 
+-- Метка пути объекта
+local pathLabel = Instance.new("TextLabel")
+pathLabel.Size = UDim2.new(1, 0, 0.05, 0)
+pathLabel.Position = UDim2.new(0, 0, 0.15, 0)
+pathLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+pathLabel.TextColor3 = Color3.fromRGB(0, 255, 128)
+pathLabel.Text = "Нажмите на объект в мире"
+pathLabel.TextScaled = true
+pathLabel.Font = Enum.Font.SourceSans
+pathLabel.TextXAlignment = Enum.TextXAlignment.Left
+local pathPad = Instance.new("UIPadding")
+pathPad.PaddingLeft = UDim.new(0.02, 0)
+pathPad.Parent = pathLabel
+pathLabel.Parent = contentFrame
+
 local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, 0, 0.8, 0)
-scrollFrame.Position = UDim2.new(0, 0, 0.15, 0)
+scrollFrame.Size = UDim2.new(1, 0, 0.75, 0)
+scrollFrame.Position = UDim2.new(0, 0, 0.20, 0)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
 scrollFrame.Parent = contentFrame
@@ -440,6 +456,59 @@ function showObjectContents(obj)
 end
 
 local function scanWorkspace()
+
+-- Клик по объекту в 3D мире: подсветка + показ пути
+local character = player.Character or player.CharacterAdded:Wait()
+
+local function isCharacterPart(instance)
+	local char = player.Character
+	if not char then return false end
+	local current = instance
+	while current do
+		if current == char then return true end
+		current = current.Parent
+	end
+	return false
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+
+	local mousePos = UserInputService:GetMouseLocation()
+	local camera = Workspace.CurrentCamera
+	local unitRay = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+
+	local rayParams = RaycastParams.new()
+	rayParams.IgnoreWater = true
+
+	local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, rayParams)
+	if result then
+		local hitPart = result.Instance
+
+		-- Игнорировать части персонажа игрока
+		if isCharacterPart(hitPart) then return end
+
+		-- Найти верхнеуровневый объект (Model/Folder) внутри Workspace
+		local targetObj = hitPart
+		local parent = hitPart.Parent
+		while parent and parent ~= Workspace and parent ~= game do
+			if parent:IsA("Model") or parent:IsA("Folder") then
+				targetObj = parent
+			end
+			parent = parent.Parent
+		end
+
+		highlightObject(targetObj, Workspace)
+		pathLabel.Text = targetObj:GetFullName()
+
+		-- Обновить навигацию в панели
+		navigationHistory = {}
+		currentObject = targetObj
+		showObjectContents(targetObj)
+		updateBreadcrumb()
+	end
+end)
 	local function refreshObjectList()
 		for _, child in pairs(panelScroll:GetChildren()) do
 			if child:IsA("TextButton") then
