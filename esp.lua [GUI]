@@ -1,0 +1,476 @@
+--[[
+	PlayerGui Explorer (Dual Panel + Draggable + Scale)
+	Left panel:  list of ScreenGuis in PlayerGui.
+	Right panel: children of the selected instance.
+	Click any item with children to navigate into it.
+	Breadcrumb bar at top shows the current path and lets
+	you go back. Leaf nodes (no children) are shown as-is.
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- ====== ScreenGui ======
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PlayerGuiExplorer"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+-- ====== Main panel ======
+local mainPanel = Instance.new("Frame")
+mainPanel.Name = "MainPanel"
+mainPanel.Size = UDim2.new(0.42, 0, 0.6, 0)
+mainPanel.Position = UDim2.new(0.01, 0, 0.05, 0)
+mainPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+mainPanel.BorderSizePixel = 0
+mainPanel.Parent = screenGui
+
+local aspect = Instance.new("UIAspectRatioConstraint")
+aspect.AspectRatio = 1.1
+aspect.Parent = mainPanel
+
+local panelCorner = Instance.new("UICorner")
+panelCorner.CornerRadius = UDim.new(0.015, 0)
+panelCorner.Parent = mainPanel
+
+-- ====== Title bar ======
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0.06, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainPanel
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0.015, 0)
+titleCorner.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.5, 0, 1, 0)
+titleLabel.Position = UDim2.new(0.02, 0, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "PlayerGui Explorer"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextScaled = true
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+local refreshButton = Instance.new("TextButton")
+refreshButton.Name = "Refresh"
+refreshButton.Size = UDim2.new(0.14, 0, 0.7, 0)
+refreshButton.Position = UDim2.new(0.83, 0, 0.15, 0)
+refreshButton.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+refreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+refreshButton.Text = "Refresh"
+refreshButton.TextScaled = true
+refreshButton.Font = Enum.Font.Gotham
+refreshButton.BorderSizePixel = 0
+refreshButton.Parent = titleBar
+
+local refreshCorner = Instance.new("UICorner")
+refreshCorner.CornerRadius = UDim.new(0.15, 0)
+refreshCorner.Parent = refreshButton
+
+-- ====== Breadcrumb bar ======
+local breadcrumbBar = Instance.new("Frame")
+breadcrumbBar.Name = "Breadcrumb"
+breadcrumbBar.Size = UDim2.new(1, 0, 0.05, 0)
+breadcrumbBar.Position = UDim2.new(0, 0, 0.06, 0)
+breadcrumbBar.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+breadcrumbBar.BorderSizePixel = 0
+breadcrumbBar.Parent = mainPanel
+
+local backButton = Instance.new("TextButton")
+backButton.Name = "Back"
+backButton.Size = UDim2.new(0.08, 0, 0.8, 0)
+backButton.Position = UDim2.new(0.01, 0, 0.1, 0)
+backButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+backButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+backButton.Text = "\xE2\x97\x80" -- ◀
+backButton.TextScaled = true
+backButton.Font = Enum.Font.GothamBold
+backButton.BorderSizePixel = 0
+backButton.Parent = breadcrumbBar
+
+local backCorner = Instance.new("UICorner")
+backCorner.CornerRadius = UDim.new(0.15, 0)
+backCorner.Parent = backButton
+
+local breadcrumbLabel = Instance.new("TextLabel")
+breadcrumbLabel.Name = "Path"
+breadcrumbLabel.Size = UDim2.new(0.88, 0, 1, 0)
+breadcrumbLabel.Position = UDim2.new(0.11, 0, 0, 0)
+breadcrumbLabel.BackgroundTransparency = 1
+breadcrumbLabel.Text = "PlayerGui"
+breadcrumbLabel.TextColor3 = Color3.fromRGB(180, 200, 255)
+breadcrumbLabel.TextScaled = true
+breadcrumbLabel.Font = Enum.Font.Code
+breadcrumbLabel.TextXAlignment = Enum.TextXAlignment.Left
+breadcrumbLabel.TextTruncate = Enum.TextTruncate.AtEnd
+breadcrumbLabel.Parent = breadcrumbBar
+
+-- ====== Left panel (ScreenGui list) ======
+local leftScroll = Instance.new("ScrollingFrame")
+leftScroll.Name = "LeftScroll"
+leftScroll.Size = UDim2.new(0.38, 0, 0.89, 0)
+leftScroll.Position = UDim2.new(0, 0, 0.11, 0)
+leftScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+leftScroll.BorderSizePixel = 0
+leftScroll.ScrollBarThickness = 4
+leftScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+leftScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+leftScroll.Parent = mainPanel
+
+local leftLayout = Instance.new("UIListLayout")
+leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+leftLayout.Padding = UDim.new(0, 0)
+leftLayout.Parent = leftScroll
+
+local leftHeader = Instance.new("TextLabel")
+leftHeader.Name = "Header"
+leftHeader.Size = UDim2.new(1, 0, 0.04, 0)
+leftHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+leftHeader.Text = " ScreenGuis"
+leftHeader.TextColor3 = Color3.fromRGB(150, 170, 200)
+leftHeader.TextScaled = true
+leftHeader.Font = Enum.Font.GothamBold
+leftHeader.TextXAlignment = Enum.TextXAlignment.Left
+leftHeader.BorderSizePixel = 0
+leftHeader.LayoutOrder = -1
+leftHeader.Parent = leftScroll
+
+-- ====== Right panel (detail / children) ======
+local rightScroll = Instance.new("ScrollingFrame")
+rightScroll.Name = "RightScroll"
+rightScroll.Size = UDim2.new(0.62, 0, 0.89, 0)
+rightScroll.Position = UDim2.new(0.38, 0, 0.11, 0)
+rightScroll.BackgroundColor3 = Color3.fromRGB(22, 22, 27)
+rightScroll.BorderSizePixel = 0
+rightScroll.ScrollBarThickness = 4
+rightScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+rightScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+rightScroll.Parent = mainPanel
+
+local rightLayout = Instance.new("UIListLayout")
+rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+rightLayout.Padding = UDim.new(0.005, 0)
+rightLayout.Parent = rightScroll
+
+local rightHeader = Instance.new("TextLabel")
+rightHeader.Name = "Header"
+rightHeader.Size = UDim2.new(1, 0, 0.04, 0)
+rightHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+rightHeader.Text = " Select a ScreenGui \xE2\x86\x92"
+rightHeader.TextColor3 = Color3.fromRGB(150, 170, 200)
+rightHeader.TextScaled = true
+rightHeader.Font = Enum.Font.GothamBold
+rightHeader.TextXAlignment = Enum.TextXAlignment.Left
+rightHeader.BorderSizePixel = 0
+rightHeader.LayoutOrder = -1
+rightHeader.Parent = rightScroll
+
+-- ====== Dragging ======
+local dragging = false
+local dragStart, startPos = nil, nil
+
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainPanel.Position
+	end
+end)
+
+titleBar.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = false
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		mainPanel.Position = UDim2.new(
+			startPos.X.Scale + delta.X / screenGui.AbsoluteSize.X,
+			startPos.X.Offset,
+			startPos.Y.Scale + delta.Y / screenGui.AbsoluteSize.Y,
+			startPos.Y.Offset
+		)
+	end
+end)
+
+-- ====== Colors ======
+local CLASS_COLORS = {
+	ScreenGui = Color3.fromRGB(80, 160, 255),
+	Frame = Color3.fromRGB(160, 200, 80),
+	TextLabel = Color3.fromRGB(255, 200, 80),
+	TextButton = Color3.fromRGB(255, 140, 80),
+	ImageLabel = Color3.fromRGB(200, 120, 255),
+	ImageButton = Color3.fromRGB(200, 100, 255),
+	TextBox = Color3.fromRGB(80, 255, 200),
+	ScrollingFrame = Color3.fromRGB(100, 255, 150),
+	Folder = Color3.fromRGB(170, 170, 190),
+}
+
+local function getClassColor(className)
+	return CLASS_COLORS[className] or Color3.fromRGB(180, 180, 190)
+end
+
+-- ====== Helpers ======
+local function getRelativePath(instance)
+	local path = {}
+	local current = instance
+	while current and current ~= playerGui do
+		table.insert(path, 1, current.Name)
+		current = current.Parent
+	end
+	if current == playerGui then
+		table.insert(path, 1, "PlayerGui")
+	end
+	return table.concat(path, ".")
+end
+
+local function getGuiChildren(instance)
+	local result = {}
+	for _, child in ipairs(instance:GetChildren()) do
+		if child ~= screenGui then
+			if child:IsA("GuiObject") or child:IsA("ScreenGui") or child:IsA("Folder") then
+				table.insert(result, child)
+			end
+		end
+	end
+	return result
+end
+
+local function updateCanvasSize(scroll)
+	task.defer(function()
+		local h = 0
+		for _, v in ipairs(scroll:GetChildren()) do
+			if v:IsA("Frame") or v:IsA("TextLabel") then
+				h += v.AbsoluteSize.Y + 2
+			end
+		end
+		scroll.CanvasSize = UDim2.new(0, 0, 0, h)
+	end)
+end
+
+-- ====== State ======
+local selectedInstance = nil  -- currently navigated-into instance
+local navStack = {}            -- stack of instances for back navigation
+local layoutOrder = 0
+
+-- Forward declaration so createRow can call it
+local populateDetail
+
+-- ====== Create a clickable row ======
+local function createRow(instance, isLeft)
+	local row = Instance.new("TextButton")
+	row.Name = "Row_" .. instance.Name
+	row.Size = UDim2.new(1, -0.01, 0.06, 0)
+	row.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+	row.BorderSizePixel = 0
+	row.Text = ""
+	row.TextScaled = true
+	row.Font = Enum.Font.SourceSans
+	row.LayoutOrder = layoutOrder
+	layoutOrder += 1
+	row.AutoButtonColor = true
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.1, 0)
+	corner.Parent = row
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0.02, 0)
+	pad.PaddingRight = UDim.new(0.02, 0)
+	pad.PaddingTop = UDim.new(0.01, 0)
+	pad.PaddingBottom = UDim.new(0.01, 0)
+	pad.Parent = row
+
+	local children = getGuiChildren(instance)
+	local hasChildren = #children > 0
+
+	-- Name (colored)
+	local nameLbl = Instance.new("TextLabel")
+	nameLbl.Size = UDim2.new(0.45, 0, 1, 0)
+	nameLbl.Position = UDim2.new(0, 0, 0, 0)
+	nameLbl.BackgroundTransparency = 1
+	nameLbl.Text = instance.Name
+	nameLbl.TextColor3 = getClassColor(instance.ClassName)
+	nameLbl.Font = Enum.Font.GothamBold
+	nameLbl.TextScaled = true
+	nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+	nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	nameLbl.Parent = row
+
+	-- Class name
+	local classLbl = Instance.new("TextLabel")
+	classLbl.Size = UDim2.new(0.3, 0, 1, 0)
+	classLbl.Position = UDim2.new(0.47, 0, 0, 0)
+	classLbl.BackgroundTransparency = 1
+	classLbl.Text = "[" .. instance.ClassName .. "]"
+	classLbl.TextColor3 = Color3.fromRGB(140, 140, 150)
+	classLbl.Font = Enum.Font.Gotham
+	classLbl.TextScaled = true
+	classLbl.TextXAlignment = Enum.TextXAlignment.Left
+	classLbl.Parent = row
+
+	-- Arrow indicator if has children
+	local arrowLbl = Instance.new("TextLabel")
+	arrowLbl.Size = UDim2.new(0.06, 0, 1, 0)
+	arrowLbl.Position = UDim2.new(0.78, 0, 0, 0)
+	arrowLbl.BackgroundTransparency = 1
+	arrowLbl.Text = hasChildren and "\xE2\x96\xB8" or "\xE2\x97\x8B" -- ▸ or ○ (leaf)
+	arrowLbl.TextColor3 = hasChildren and Color3.fromRGB(100, 200, 120) or Color3.fromRGB(100, 100, 110)
+	arrowLbl.Font = Enum.Font.GothamBold
+	arrowLbl.TextScaled = true
+	arrowLbl.Parent = row
+
+	-- Child count
+	local countLbl = Instance.new("TextLabel")
+	countLbl.Size = UDim2.new(0.14, 0, 1, 0)
+	countLbl.Position = UDim2.new(0.85, 0, 0, 0)
+	countLbl.BackgroundTransparency = 1
+	countLbl.Text = hasChildren and tostring(#children) .. " items" or "leaf"
+	countLbl.TextColor3 = hasChildren and Color3.fromRGB(120, 120, 140) or Color3.fromRGB(80, 80, 90)
+	countLbl.Font = Enum.Font.Gotham
+	countLbl.TextScaled = true
+	countLbl.TextXAlignment = Enum.TextXAlignment.Right
+	countLbl.Parent = row
+
+	-- Store instance reference
+	row:SetAttribute("InstanceRef", tostring(instance))
+
+	-- Click handler
+	row.MouseButton1Click:Connect(function()
+		if hasChildren then
+			if selectedInstance then
+				table.insert(navStack, selectedInstance)
+			end
+			selectedInstance = instance
+			populateDetail(instance)
+		else
+			-- Leaf node: flash to indicate no children
+			row.BackgroundColor3 = Color3.fromRGB(60, 60, 50)
+			task.delay(0.2, function()
+				row.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+			end)
+		end
+	end)
+
+	return row
+end
+
+-- ====== Populate left panel (ScreenGui list) ======
+local function populateLeft()
+	layoutOrder = 0
+	for _, child in ipairs(leftScroll:GetChildren()) do
+		if child ~= leftHeader and not child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
+
+	for _, child in ipairs(playerGui:GetChildren()) do
+		if child ~= screenGui then
+			local row = createRow(child, true)
+			row.Parent = leftScroll
+		end
+	end
+
+	updateCanvasSize(leftScroll)
+end
+
+-- ====== Populate right panel (children of instance) ======
+populateDetail = function(instance)
+	layoutOrder = 0
+	for _, child in ipairs(rightScroll:GetChildren()) do
+		if child ~= rightHeader and not child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
+
+	-- Update breadcrumb
+	breadcrumbLabel.Text = getRelativePath(instance)
+
+	local children = getGuiChildren(instance)
+
+	if #children == 0 then
+		local empty = Instance.new("TextLabel")
+		empty.Size = UDim2.new(1, 0, 0.08, 0)
+		empty.BackgroundTransparency = 1
+		empty.Text = "No children inside"
+		empty.TextColor3 = Color3.fromRGB(120, 120, 130)
+		empty.Font = Enum.Font.Gotham
+		empty.TextScaled = true
+		empty.LayoutOrder = 0
+		empty.Parent = rightScroll
+	else
+		rightHeader.Text = " " .. #children .. " children in " .. instance.Name
+		for _, child in ipairs(children) do
+			local row = createRow(child, false)
+			row.Parent = rightScroll
+		end
+	end
+
+	updateCanvasSize(rightScroll)
+end
+
+-- ====== Back button ======
+backButton.MouseButton1Click:Connect(function()
+	if #navStack > 0 then
+		selectedInstance = table.remove(navStack)
+		populateDetail(selectedInstance)
+	elseif selectedInstance then
+		selectedInstance = nil
+		-- Clear right panel
+		for _, child in ipairs(rightScroll:GetChildren()) do
+			if child ~= rightHeader and not child:IsA("UIListLayout") then
+				child:Destroy()
+			end
+		end
+		rightHeader.Text = " Select a ScreenGui \xE2\x86\x92"
+		breadcrumbLabel.Text = "PlayerGui"
+		updateCanvasSize(rightScroll)
+	end
+end)
+
+-- ====== Refresh ======
+refreshButton.MouseButton1Click:Connect(function()
+	populateLeft()
+	if selectedInstance and selectedInstance.Parent then
+		populateDetail(selectedInstance)
+	else
+		selectedInstance = nil
+		navStack = {}
+		for _, child in ipairs(rightScroll:GetChildren()) do
+			if child ~= rightHeader and not child:IsA("UIListLayout") then
+				child:Destroy()
+			end
+		end
+		rightHeader.Text = " Select a ScreenGui \xE2\x86\x92"
+		breadcrumbLabel.Text = "PlayerGui"
+		updateCanvasSize(rightScroll)
+	end
+end)
+
+-- ====== Init ======
+populateLeft()
+
+-- Auto-refresh on PlayerGui changes
+playerGui.ChildAdded:Connect(function(child)
+	if child ~= screenGui then
+		populateLeft()
+	end
+end)
+playerGui.ChildRemoved:Connect(function(child)
+	if child ~= screenGui then
+		populateLeft()
+	end
+end)
