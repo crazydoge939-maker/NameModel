@@ -1,10 +1,8 @@
 --[[
-	PlayerGui Explorer (Dual Panel + Draggable + Scale)
-	Left panel:  list of ScreenGuis in PlayerGui.
-	Right panel: children of the selected instance.
-	Click any item with children to navigate into it.
-	Breadcrumb bar at top shows the current path and lets
-	you go back. Leaf nodes (no children) are shown as-is.
+	PlayerGui Explorer (Triple Panel + Draggable + Scale)
+	Left:   list of ScreenGuis in PlayerGui.
+	Middle: children of the selected instance.
+	Right:  properties/state of the clicked instance.
 ]]
 
 local Players = game:GetService("Players")
@@ -22,14 +20,14 @@ screenGui.Parent = playerGui
 -- ====== Main panel ======
 local mainPanel = Instance.new("Frame")
 mainPanel.Name = "MainPanel"
-mainPanel.Size = UDim2.new(0.42, 0, 0.6, 0)
+mainPanel.Size = UDim2.new(0.6, 0, 0.65, 0)
 mainPanel.Position = UDim2.new(0.01, 0, 0.05, 0)
 mainPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
 mainPanel.BorderSizePixel = 0
 mainPanel.Parent = screenGui
 
 local aspect = Instance.new("UIAspectRatioConstraint")
-aspect.AspectRatio = 1.1
+aspect.AspectRatio = 1.5
 aspect.Parent = mainPanel
 
 local panelCorner = Instance.new("UICorner")
@@ -38,7 +36,6 @@ panelCorner.Parent = mainPanel
 
 -- ====== Title bar ======
 local titleBar = Instance.new("Frame")
-titleBar.Name = "TitleBar"
 titleBar.Size = UDim2.new(1, 0, 0.06, 0)
 titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 titleBar.BorderSizePixel = 0
@@ -49,7 +46,7 @@ titleCorner.CornerRadius = UDim.new(0.015, 0)
 titleCorner.Parent = titleBar
 
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(0.5, 0, 1, 0)
+titleLabel.Size = UDim2.new(0.4, 0, 1, 0)
 titleLabel.Position = UDim2.new(0.02, 0, 0, 0)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "PlayerGui Explorer"
@@ -60,9 +57,8 @@ titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = titleBar
 
 local refreshButton = Instance.new("TextButton")
-refreshButton.Name = "Refresh"
-refreshButton.Size = UDim2.new(0.14, 0, 0.7, 0)
-refreshButton.Position = UDim2.new(0.83, 0, 0.15, 0)
+refreshButton.Size = UDim2.new(0.12, 0, 0.7, 0)
+refreshButton.Position = UDim2.new(0.86, 0, 0.15, 0)
 refreshButton.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
 refreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 refreshButton.Text = "Refresh"
@@ -77,7 +73,6 @@ refreshCorner.Parent = refreshButton
 
 -- ====== Breadcrumb bar ======
 local breadcrumbBar = Instance.new("Frame")
-breadcrumbBar.Name = "Breadcrumb"
 breadcrumbBar.Size = UDim2.new(1, 0, 0.05, 0)
 breadcrumbBar.Position = UDim2.new(0, 0, 0.06, 0)
 breadcrumbBar.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
@@ -85,12 +80,11 @@ breadcrumbBar.BorderSizePixel = 0
 breadcrumbBar.Parent = mainPanel
 
 local backButton = Instance.new("TextButton")
-backButton.Name = "Back"
-backButton.Size = UDim2.new(0.08, 0, 0.8, 0)
+backButton.Size = UDim2.new(0.06, 0, 0.8, 0)
 backButton.Position = UDim2.new(0.01, 0, 0.1, 0)
 backButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
 backButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-backButton.Text = "\xE2\x97\x80" -- ◀
+backButton.Text = "\xE2\x97\x80"
 backButton.TextScaled = true
 backButton.Font = Enum.Font.GothamBold
 backButton.BorderSizePixel = 0
@@ -101,9 +95,8 @@ backCorner.CornerRadius = UDim.new(0.15, 0)
 backCorner.Parent = backButton
 
 local breadcrumbLabel = Instance.new("TextLabel")
-breadcrumbLabel.Name = "Path"
-breadcrumbLabel.Size = UDim2.new(0.88, 0, 1, 0)
-breadcrumbLabel.Position = UDim2.new(0.11, 0, 0, 0)
+breadcrumbLabel.Size = UDim2.new(0.9, 0, 1, 0)
+breadcrumbLabel.Position = UDim2.new(0.09, 0, 0, 0)
 breadcrumbLabel.BackgroundTransparency = 1
 breadcrumbLabel.Text = "PlayerGui"
 breadcrumbLabel.TextColor3 = Color3.fromRGB(180, 200, 255)
@@ -115,8 +108,7 @@ breadcrumbLabel.Parent = breadcrumbBar
 
 -- ====== Left panel (ScreenGui list) ======
 local leftScroll = Instance.new("ScrollingFrame")
-leftScroll.Name = "LeftScroll"
-leftScroll.Size = UDim2.new(0.38, 0, 0.89, 0)
+leftScroll.Size = UDim2.new(0.24, 0, 0.89, 0)
 leftScroll.Position = UDim2.new(0, 0, 0.11, 0)
 leftScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 leftScroll.BorderSizePixel = 0
@@ -127,12 +119,11 @@ leftScroll.Parent = mainPanel
 
 local leftLayout = Instance.new("UIListLayout")
 leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
-leftLayout.Padding = UDim.new(0, 0)
+leftLayout.Padding = UDim.new(0.005, 0)
 leftLayout.Parent = leftScroll
 
 local leftHeader = Instance.new("TextLabel")
-leftHeader.Name = "Header"
-leftHeader.Size = UDim2.new(1, 0, 0.04, 0)
+leftHeader.Size = UDim2.new(1, 0, 0.05, 0)
 leftHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
 leftHeader.Text = " ScreenGuis"
 leftHeader.TextColor3 = Color3.fromRGB(150, 170, 200)
@@ -143,35 +134,61 @@ leftHeader.BorderSizePixel = 0
 leftHeader.LayoutOrder = -1
 leftHeader.Parent = leftScroll
 
--- ====== Right panel (detail / children) ======
-local rightScroll = Instance.new("ScrollingFrame")
-rightScroll.Name = "RightScroll"
-rightScroll.Size = UDim2.new(0.62, 0, 0.89, 0)
-rightScroll.Position = UDim2.new(0.38, 0, 0.11, 0)
-rightScroll.BackgroundColor3 = Color3.fromRGB(22, 22, 27)
-rightScroll.BorderSizePixel = 0
-rightScroll.ScrollBarThickness = 4
-rightScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-rightScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-rightScroll.Parent = mainPanel
+-- ====== Middle panel (children) ======
+local midScroll = Instance.new("ScrollingFrame")
+midScroll.Size = UDim2.new(0.34, 0, 0.89, 0)
+midScroll.Position = UDim2.new(0.24, 0, 0.11, 0)
+midScroll.BackgroundColor3 = Color3.fromRGB(22, 22, 27)
+midScroll.BorderSizePixel = 0
+midScroll.ScrollBarThickness = 4
+midScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+midScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+midScroll.Parent = mainPanel
 
-local rightLayout = Instance.new("UIListLayout")
-rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
-rightLayout.Padding = UDim.new(0.005, 0)
-rightLayout.Parent = rightScroll
+local midLayout = Instance.new("UIListLayout")
+midLayout.SortOrder = Enum.SortOrder.LayoutOrder
+midLayout.Padding = UDim.new(0.005, 0)
+midLayout.Parent = midScroll
 
-local rightHeader = Instance.new("TextLabel")
-rightHeader.Name = "Header"
-rightHeader.Size = UDim2.new(1, 0, 0.04, 0)
-rightHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-rightHeader.Text = " Select a ScreenGui \xE2\x86\x92"
-rightHeader.TextColor3 = Color3.fromRGB(150, 170, 200)
-rightHeader.TextScaled = true
-rightHeader.Font = Enum.Font.GothamBold
-rightHeader.TextXAlignment = Enum.TextXAlignment.Left
-rightHeader.BorderSizePixel = 0
-rightHeader.LayoutOrder = -1
-rightHeader.Parent = rightScroll
+local midHeader = Instance.new("TextLabel")
+midHeader.Size = UDim2.new(1, 0, 0.05, 0)
+midHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+midHeader.Text = " Select a ScreenGui"
+midHeader.TextColor3 = Color3.fromRGB(150, 170, 200)
+midHeader.TextScaled = true
+midHeader.Font = Enum.Font.GothamBold
+midHeader.TextXAlignment = Enum.TextXAlignment.Left
+midHeader.BorderSizePixel = 0
+midHeader.LayoutOrder = -1
+midHeader.Parent = midScroll
+
+-- ====== Right panel (properties) ======
+local infoScroll = Instance.new("ScrollingFrame")
+infoScroll.Size = UDim2.new(0.42, 0, 0.89, 0)
+infoScroll.Position = UDim2.new(0.58, 0, 0.11, 0)
+infoScroll.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+infoScroll.BorderSizePixel = 0
+infoScroll.ScrollBarThickness = 4
+infoScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+infoScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+infoScroll.Parent = mainPanel
+
+local infoLayout = Instance.new("UIListLayout")
+infoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+infoLayout.Padding = UDim.new(0.004, 0)
+infoLayout.Parent = infoScroll
+
+local infoHeader = Instance.new("TextLabel")
+infoHeader.Size = UDim2.new(1, 0, 0.05, 0)
+infoHeader.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+infoHeader.Text = " Properties"
+infoHeader.TextColor3 = Color3.fromRGB(150, 170, 200)
+infoHeader.TextScaled = true
+infoHeader.Font = Enum.Font.GothamBold
+infoHeader.TextXAlignment = Enum.TextXAlignment.Left
+infoHeader.BorderSizePixel = 0
+infoHeader.LayoutOrder = -1
+infoHeader.Parent = infoScroll
 
 -- ====== Dragging ======
 local dragging = false
@@ -261,19 +278,182 @@ local function updateCanvasSize(scroll)
 	end)
 end
 
+-- ====== Safe property reader ======
+local function safeProp(obj, propName)
+	local ok, val = pcall(function()
+		return obj[propName]
+	end)
+	if ok then return val end
+	return nil
+end
+
+local function formatValue(val)
+	if typeof(val) == "boolean" then
+		return val and "true" or "false"
+	elseif typeof(val) == "number" then
+		return tostring(val)
+	elseif typeof(val) == "string" then
+		return val
+	elseif typeof(val) == "Color3" then
+		return string.format("RGB(%d,%d,%d)",
+			math.floor(val.R * 255), math.floor(val.G * 255), math.floor(val.B * 255))
+	elseif typeof(val) == "UDim2" then
+		return string.format("{%.2f,%d},{%.2f,%d}",
+			val.X.Scale, val.X.Offset, val.Y.Scale, val.Y.Offset)
+	elseif typeof(val) == "UDim" then
+		return string.format("{%.2f,%d}", val.Scale, val.Offset)
+	elseif typeof(val) == "EnumItem" then
+		return tostring(val.Name)
+	elseif typeof(val) == "Vector2" then
+		return string.format("(%d,%d)", val.X, val.Y)
+	elseif typeof(val) == "Instance" then
+		return val.Name .. " [" .. val.ClassName .. "]"
+	else
+		return tostring(val)
+	end
+end
+
+-- Property sets per class
+local function getPropertiesForInstance(obj)
+	local props = {"Name"}
+
+	if obj:IsA("ScreenGui") then
+		table.insert(props, "Enabled")
+		table.insert(props, "DisplayOrder")
+		table.insert(props, "ResetOnSpawn")
+		table.insert(props, "ZIndexBehavior")
+		table.insert(props, "IgnoreGuiInset")
+		table.insert(props, "AlwaysOnTop")
+	end
+
+	if obj:IsA("GuiObject") then
+		table.insert(props, "Visible")
+		table.insert(props, "Position")
+		table.insert(props, "Size")
+		table.insert(props, "AnchorPoint")
+		table.insert(props, "BackgroundColor3")
+		table.insert(props, "BackgroundTransparency")
+		table.insert(props, "BorderSizePixel")
+		table.insert(props, "ZIndex")
+		table.insert(props, "LayoutOrder")
+		table.insert(props, "AutomaticSize")
+	end
+
+	if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+		table.insert(props, "Text")
+		table.insert(props, "TextColor3")
+		table.insert(props, "TextScaled")
+		table.insert(props, "TextSize")
+		table.insert(props, "Font")
+		table.insert(props, "TextXAlignment")
+		table.insert(props, "TextYAlignment")
+		table.insert(props, "TextTransparency")
+	end
+
+	if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+		table.insert(props, "AutoButtonColor")
+		table.insert(props, "Modal")
+	end
+
+	if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+		table.insert(props, "Image")
+		table.insert(props, "ImageColor3")
+		table.insert(props, "ImageTransparency")
+		table.insert(props, "ScaleType")
+	end
+
+	if obj:IsA("ScrollingFrame") then
+		table.insert(props, "ScrollBarThickness")
+		table.insert(props, "CanvasSize")
+		table.insert(props, "AutomaticCanvasSize")
+		table.insert(props, "ScrollingDirection")
+		table.insert(props, "ScrollBarImageColor3")
+	end
+
+	return props
+end
+
 -- ====== State ======
-local selectedInstance = nil  -- currently navigated-into instance
-local navStack = {}            -- stack of instances for back navigation
+local selectedInstance = nil
+local navStack = {}
 local layoutOrder = 0
 
--- Forward declaration so createRow can call it
+-- Forward declarations
 local populateDetail
+local populateInfo
+
+-- ====== Populate info panel ======
+populateInfo = function(instance)
+	for _, child in ipairs(infoScroll:GetChildren()) do
+		if child ~= infoHeader and not child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
+
+	infoHeader.Text = " " .. instance.Name .. " [" .. instance.ClassName .. "]"
+
+	local props = getPropertiesForInstance(instance)
+
+	for i, propName in ipairs(props) do
+		local val = safeProp(instance, propName)
+		local valStr = "<unreadable>"
+		if val ~= nil then
+			valStr = formatValue(val)
+		end
+
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, 0, 0.055, 0)
+		row.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+		row.BorderSizePixel = 0
+		row.LayoutOrder = i
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.1, 0)
+		corner.Parent = row
+
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0.03, 0)
+		pad.PaddingRight = UDim.new(0.03, 0)
+		pad.Parent = row
+
+		local nameLbl = Instance.new("TextLabel")
+		nameLbl.Size = UDim2.new(0.4, 0, 1, 0)
+		nameLbl.BackgroundTransparency = 1
+		nameLbl.Text = propName
+		nameLbl.TextColor3 = Color3.fromRGB(130, 180, 255)
+		nameLbl.Font = Enum.Font.GothamBold
+		nameLbl.TextScaled = true
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLbl.Parent = row
+
+		local valLbl = Instance.new("TextLabel")
+		valLbl.Size = UDim2.new(0.58, 0, 1, 0)
+		valLbl.Position = UDim2.new(0.42, 0, 0, 0)
+		valLbl.BackgroundTransparency = 1
+		valLbl.Text = valStr
+		valLbl.Font = Enum.Font.Code
+		valLbl.TextScaled = true
+		valLbl.TextXAlignment = Enum.TextXAlignment.Left
+		valLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		valLbl.Parent = row
+
+		if typeof(val) == "boolean" then
+			valLbl.TextColor3 = val and Color3.fromRGB(100, 220, 100) or Color3.fromRGB(220, 100, 100)
+		else
+			valLbl.TextColor3 = Color3.fromRGB(200, 220, 180)
+		end
+
+		row.Parent = infoScroll
+	end
+
+	updateCanvasSize(infoScroll)
+end
 
 -- ====== Create a clickable row ======
 local function createRow(instance, isLeft)
 	local row = Instance.new("TextButton")
-	row.Name = "Row_" .. instance.Name
-	row.Size = UDim2.new(1, -0.01, 0.06, 0)
+	row.Size = UDim2.new(1, -0.01, 0.07, 0)
 	row.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
 	row.BorderSizePixel = 0
 	row.Text = ""
@@ -297,10 +477,8 @@ local function createRow(instance, isLeft)
 	local children = getGuiChildren(instance)
 	local hasChildren = #children > 0
 
-	-- Name (colored)
 	local nameLbl = Instance.new("TextLabel")
-	nameLbl.Size = UDim2.new(0.45, 0, 1, 0)
-	nameLbl.Position = UDim2.new(0, 0, 0, 0)
+	nameLbl.Size = UDim2.new(0.5, 0, 1, 0)
 	nameLbl.BackgroundTransparency = 1
 	nameLbl.Text = instance.Name
 	nameLbl.TextColor3 = getClassColor(instance.ClassName)
@@ -310,10 +488,9 @@ local function createRow(instance, isLeft)
 	nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLbl.Parent = row
 
-	-- Class name
 	local classLbl = Instance.new("TextLabel")
 	classLbl.Size = UDim2.new(0.3, 0, 1, 0)
-	classLbl.Position = UDim2.new(0.47, 0, 0, 0)
+	classLbl.Position = UDim2.new(0.5, 0, 0, 0)
 	classLbl.BackgroundTransparency = 1
 	classLbl.Text = "[" .. instance.ClassName .. "]"
 	classLbl.TextColor3 = Color3.fromRGB(140, 140, 150)
@@ -322,34 +499,31 @@ local function createRow(instance, isLeft)
 	classLbl.TextXAlignment = Enum.TextXAlignment.Left
 	classLbl.Parent = row
 
-	-- Arrow indicator if has children
 	local arrowLbl = Instance.new("TextLabel")
-	arrowLbl.Size = UDim2.new(0.06, 0, 1, 0)
-	arrowLbl.Position = UDim2.new(0.78, 0, 0, 0)
+	arrowLbl.Size = UDim2.new(0.08, 0, 1, 0)
+	arrowLbl.Position = UDim2.new(0.82, 0, 0, 0)
 	arrowLbl.BackgroundTransparency = 1
-	arrowLbl.Text = hasChildren and "\xE2\x96\xB8" or "\xE2\x97\x8B" -- ▸ or ○ (leaf)
+	arrowLbl.Text = hasChildren and "\xE2\x96\xB8" or "\xE2\x97\x8B"
 	arrowLbl.TextColor3 = hasChildren and Color3.fromRGB(100, 200, 120) or Color3.fromRGB(100, 100, 110)
 	arrowLbl.Font = Enum.Font.GothamBold
 	arrowLbl.TextScaled = true
 	arrowLbl.Parent = row
 
-	-- Child count
 	local countLbl = Instance.new("TextLabel")
-	countLbl.Size = UDim2.new(0.14, 0, 1, 0)
-	countLbl.Position = UDim2.new(0.85, 0, 0, 0)
+	countLbl.Size = UDim2.new(0.1, 0, 1, 0)
+	countLbl.Position = UDim2.new(0.9, 0, 0, 0)
 	countLbl.BackgroundTransparency = 1
-	countLbl.Text = hasChildren and tostring(#children) .. " items" or "leaf"
+	countLbl.Text = hasChildren and tostring(#children) or "-"
 	countLbl.TextColor3 = hasChildren and Color3.fromRGB(120, 120, 140) or Color3.fromRGB(80, 80, 90)
 	countLbl.Font = Enum.Font.Gotham
 	countLbl.TextScaled = true
 	countLbl.TextXAlignment = Enum.TextXAlignment.Right
 	countLbl.Parent = row
 
-	-- Store instance reference
 	row:SetAttribute("InstanceRef", tostring(instance))
 
-	-- Click handler
 	row.MouseButton1Click:Connect(function()
+		populateInfo(instance)
 		if hasChildren then
 			if selectedInstance then
 				table.insert(navStack, selectedInstance)
@@ -357,7 +531,6 @@ local function createRow(instance, isLeft)
 			selectedInstance = instance
 			populateDetail(instance)
 		else
-			-- Leaf node: flash to indicate no children
 			row.BackgroundColor3 = Color3.fromRGB(60, 60, 50)
 			task.delay(0.2, function()
 				row.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
@@ -368,7 +541,7 @@ local function createRow(instance, isLeft)
 	return row
 end
 
--- ====== Populate left panel (ScreenGui list) ======
+-- ====== Populate left panel ======
 local function populateLeft()
 	layoutOrder = 0
 	for _, child in ipairs(leftScroll:GetChildren()) do
@@ -376,31 +549,25 @@ local function populateLeft()
 			child:Destroy()
 		end
 	end
-
 	for _, child in ipairs(playerGui:GetChildren()) do
 		if child ~= screenGui then
 			local row = createRow(child, true)
 			row.Parent = leftScroll
 		end
 	end
-
 	updateCanvasSize(leftScroll)
 end
 
--- ====== Populate right panel (children of instance) ======
+-- ====== Populate middle panel ======
 populateDetail = function(instance)
 	layoutOrder = 0
-	for _, child in ipairs(rightScroll:GetChildren()) do
-		if child ~= rightHeader and not child:IsA("UIListLayout") then
+	for _, child in ipairs(midScroll:GetChildren()) do
+		if child ~= midHeader and not child:IsA("UIListLayout") then
 			child:Destroy()
 		end
 	end
-
-	-- Update breadcrumb
 	breadcrumbLabel.Text = getRelativePath(instance)
-
 	local children = getGuiChildren(instance)
-
 	if #children == 0 then
 		local empty = Instance.new("TextLabel")
 		empty.Size = UDim2.new(1, 0, 0.08, 0)
@@ -410,16 +577,15 @@ populateDetail = function(instance)
 		empty.Font = Enum.Font.Gotham
 		empty.TextScaled = true
 		empty.LayoutOrder = 0
-		empty.Parent = rightScroll
+		empty.Parent = midScroll
 	else
-		rightHeader.Text = " " .. #children .. " children in " .. instance.Name
+		midHeader.Text = " " .. #children .. " children in " .. instance.Name
 		for _, child in ipairs(children) do
 			local row = createRow(child, false)
-			row.Parent = rightScroll
+			row.Parent = midScroll
 		end
 	end
-
-	updateCanvasSize(rightScroll)
+	updateCanvasSize(midScroll)
 end
 
 -- ====== Back button ======
@@ -429,19 +595,18 @@ backButton.MouseButton1Click:Connect(function()
 		populateDetail(selectedInstance)
 	elseif selectedInstance then
 		selectedInstance = nil
-		-- Clear right panel
-		for _, child in ipairs(rightScroll:GetChildren()) do
-			if child ~= rightHeader and not child:IsA("UIListLayout") then
+		for _, child in ipairs(midScroll:GetChildren()) do
+			if child ~= midHeader and not child:IsA("UIListLayout") then
 				child:Destroy()
 			end
 		end
-		rightHeader.Text = " Select a ScreenGui \xE2\x86\x92"
+		midHeader.Text = " Select a ScreenGui"
 		breadcrumbLabel.Text = "PlayerGui"
-		updateCanvasSize(rightScroll)
+		updateCanvasSize(midScroll)
 	end
 end)
 
--- ====== Refresh ======
+-- ====== Refresh button ======
 refreshButton.MouseButton1Click:Connect(function()
 	populateLeft()
 	if selectedInstance and selectedInstance.Parent then
@@ -449,21 +614,20 @@ refreshButton.MouseButton1Click:Connect(function()
 	else
 		selectedInstance = nil
 		navStack = {}
-		for _, child in ipairs(rightScroll:GetChildren()) do
-			if child ~= rightHeader and not child:IsA("UIListLayout") then
+		for _, child in ipairs(midScroll:GetChildren()) do
+			if child ~= midHeader and not child:IsA("UIListLayout") then
 				child:Destroy()
 			end
 		end
-		rightHeader.Text = " Select a ScreenGui \xE2\x86\x92"
+		midHeader.Text = " Select a ScreenGui"
 		breadcrumbLabel.Text = "PlayerGui"
-		updateCanvasSize(rightScroll)
+		updateCanvasSize(midScroll)
 	end
 end)
 
 -- ====== Init ======
 populateLeft()
 
--- Auto-refresh on PlayerGui changes
 playerGui.ChildAdded:Connect(function(child)
 	if child ~= screenGui then
 		populateLeft()
