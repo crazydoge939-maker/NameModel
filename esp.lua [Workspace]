@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -14,6 +15,17 @@ local highlightedObject = nil -- для переключения подсвет�
 local clickSelectEnabled = false -- выбор объектов кликом в 3D мире
 local cameraModeEnabled = false -- режим камеры: при выборе объекта камера летит к нему
 local lastSelectedObject = nil -- последний выбранный объект (для ТП)
+
+-- Состояние орбитальной камеры
+local cameraTargetPos = Vector3.new(0, 0, 0)
+local cameraYaw = 0
+local cameraPitch = 0
+local cameraDistance = 30
+local rightMouseDragging = false
+local cameraTweening = false
+
+-- Forward-declaration
+local updateCameraCFrame
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
@@ -134,11 +146,47 @@ updateCameraToggleVisual()
 cameraToggleButton.MouseButton1Click:Connect(function()
 	cameraModeEnabled = not cameraModeEnabled
 	updateCameraToggleVisual()
-	if not cameraModeEnabled then
-		local camera = Workspace.CurrentCamera
+	local camera = Workspace.CurrentCamera
+	if cameraModeEnabled then
+		-- Включить Scriptable, чтобы стандартная камера не перехватывала ввод
+		if camera then
+			camera.CameraType = Enum.CameraType.Scriptable
+		end
+	else
+		rightMouseDragging = false
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 		if camera then
 			camera.CameraType = Enum.CameraType.Custom
 		end
+	end
+end)
+
+-- Вращение камеры правой кнопкой мыши
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if cameraModeEnabled and input.UserInputType == Enum.UserInputType.MouseButton2 then
+		rightMouseDragging = true
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		rightMouseDragging = false
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	end
+end)
+
+-- Вращение (движение мыши с ПКМ) и зум (колёсико)
+UserInputService.InputChanged:Connect(function(input, gameProcessed)
+	if not cameraModeEnabled then return end
+	if input.UserInputType == Enum.UserInputType.MouseMovement and rightMouseDragging then
+		local delta = input.Delta
+		cameraYaw = cameraYaw - delta.X * 0.005
+		cameraPitch = math.clamp(cameraPitch - delta.Y * 0.005, math.rad(-85), math.rad(85))
+		updateCameraCFrame()
+	elseif input.UserInputType == Enum.UserInputType.MouseWheel then
+		cameraDistance = math.clamp(cameraDistance - input.Position.Z * 5, 5, 200)
+		updateCameraCFrame()
 	end
 end)
 
@@ -160,18 +208,58 @@ local function getObjectPosition(obj)
 	end
 end
 
+function updateCameraCFrame()
+	local camera = Workspace.CurrentCamera
+	if not camera then return end
+	local rot = CFrame.fromOrientation(cameraPitch, cameraYaw, 0)
+	local cameraCFrame = CFrame.new(cameraTargetPos) * rot * CFrame.new(0, 0, cameraDistance)
+	camera.CFrame = CFrame.lookAt(cameraCFrame.Position, cameraTargetPos)
+end
+
 local function focusCameraOnObject(obj)
 	if not cameraModeEnabled then return end
 	local camera = Workspace.CurrentCamera
 	if not camera then return end
-	local targetPos = getObjectPosition(obj)
-	local offset = Vector3.new(20, 20, 20)
-	local cameraPos = targetPos + offset
+	cameraTargetPos = getObjectPosition(obj)
+	-- Вычислить начальные углы и дистанцию из текущей позиции камеры
+	local offset = camera.CFrame.Position - cameraTargetPos
+	cameraDistance = math.clamp(offset.Magnitude, 5, 200)
+	if offset.Magnitude > 0.1 then
+		cameraYaw = math.atan2(-offset.X, -offset.Z)
+		cameraPitch = math.asin(math.clamp(offset.Y / offset.Magnitude, -1, 1))
+	else
+		cameraYaw = 0
+		cameraPitch = 0
+	end
 	camera.CameraType = Enum.CameraType.Scriptable
+	-- Плавный переход к новой позиции
+	local targetCFrame
+	local function computeTargetCFrame()
+		local rot = CFrame.fromOrientation(cameraPitch, cameraYaw, 0)
+		local cf = CFrame.new(cameraTargetPos) * rot * CFrame.new(0, 0, cameraDistance)
+		return CFrame.lookAt(cf.Position, cameraTargetPos)
+	end
 	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local tween = TweenService:Create(camera, tweenInfo, {CFrame = CFrame.lookAt(cameraPos, targetPos)})
+	local tween = TweenService:Create(camera, tweenInfo, {CFrame = computeTargetCFrame()})
 	tween:Play()
+	cameraTweening = true
+	tween.Completed:Connect(function()
+		cameraTweening = false
+	end)
 end
+
+-- Отслеживание перемещения выбранного объекта
+RunService.RenderStepped:Connect(function()
+	if not cameraModeEnabled then return end
+	if cameraTweening then return end
+	if not lastSelectedObject then return end
+	if not lastSelectedObject.Parent then return end -- объект удалён
+	local newPos = getObjectPosition(lastSelectedObject)
+	if (newPos - cameraTargetPos).Magnitude > 0.01 then
+		cameraTargetPos = newPos
+		updateCameraCFrame()
+	end
+end)
 
 local function teleportToObject()
 	if not lastSelectedObject then return end
@@ -183,6 +271,8 @@ local function teleportToObject()
 	hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
 	if cameraModeEnabled then
 		cameraModeEnabled = false
+		rightMouseDragging = false
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 		updateCameraToggleVisual()
 		local camera = Workspace.CurrentCamera
 		if camera then
