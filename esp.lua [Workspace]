@@ -34,7 +34,7 @@ screenGui.Parent = playerGui
 
 -- Левая панель
 local panel = Instance.new("Frame")
-panel.Size = UDim2.new(0, 170, 0, 260)
+panel.Size = UDim2.new(0, 130, 0, 200)
 panel.Position = UDim2.new(0.01, 0, 0.05, 0)
 panel.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 panel.BorderSizePixel = 0
@@ -63,7 +63,7 @@ headerCorner.CornerRadius = UDim.new(0, 8)
 headerCorner.Parent = panelHeader
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -40, 1, 0)
+title.Size = UDim2.new(1, -84, 1, 0)
 title.Position = UDim2.new(0, 8, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = "Объекты"
@@ -73,11 +73,43 @@ title.Font = Enum.Font.SourceSansBold
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = panelHeader
 
+-- Кнопка переключения видимости 2-й панели (Контент)
+local toggleContentBtn = Instance.new("TextButton")
+toggleContentBtn.Name = "ToggleContent"
+toggleContentBtn.Size = UDim2.new(0, 18, 0, 20)
+toggleContentBtn.Position = UDim2.new(1, -40, 0.5, -10)
+toggleContentBtn.Text = "📋"
+toggleContentBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 60)
+toggleContentBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleContentBtn.TextScaled = true
+toggleContentBtn.Font = Enum.Font.SourceSansBold
+toggleContentBtn.Parent = panelHeader
+
+local toggleContentCorner = Instance.new("UICorner")
+toggleContentCorner.CornerRadius = UDim.new(0, 6)
+toggleContentCorner.Parent = toggleContentBtn
+
+-- Кнопка переключения видимости 3-й панели (Свойства)
+local togglePropsBtn = Instance.new("TextButton")
+togglePropsBtn.Name = "ToggleProps"
+togglePropsBtn.Size = UDim2.new(0, 18, 0, 20)
+togglePropsBtn.Position = UDim2.new(1, -20, 0.5, -10)
+togglePropsBtn.Text = "⚙"
+togglePropsBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 60)
+togglePropsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+togglePropsBtn.TextScaled = true
+togglePropsBtn.Font = Enum.Font.SourceSansBold
+togglePropsBtn.Parent = panelHeader
+
+local togglePropsCorner = Instance.new("UICorner")
+togglePropsCorner.CornerRadius = UDim.new(0, 6)
+togglePropsCorner.Parent = togglePropsBtn
+
 -- Кнопка переключения выбора по клику
 local clickToggleButton = Instance.new("TextButton")
 clickToggleButton.Name = "ClickSelectToggle"
-clickToggleButton.Size = UDim2.new(0, 28, 0, 20)
-clickToggleButton.Position = UDim2.new(1, -62, 0.5, -10)
+clickToggleButton.Size = UDim2.new(0, 18, 0, 20)
+clickToggleButton.Position = UDim2.new(1, -80, 0.5, -10)
 clickToggleButton.Text = "🖱"
 clickToggleButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
 clickToggleButton.TextColor3 = Color3.fromRGB(180, 180, 190)
@@ -111,8 +143,8 @@ updateToggleVisual()
 -- Кнопка переключения режима камеры
 local cameraToggleButton = Instance.new("TextButton")
 cameraToggleButton.Name = "CameraModeToggle"
-cameraToggleButton.Size = UDim2.new(0, 28, 0, 20)
-cameraToggleButton.Position = UDim2.new(1, -32, 0.5, -10)
+cameraToggleButton.Size = UDim2.new(0, 18, 0, 20)
+cameraToggleButton.Position = UDim2.new(1, -60, 0.5, -10)
 cameraToggleButton.Text = "📷"
 cameraToggleButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
 cameraToggleButton.TextColor3 = Color3.fromRGB(180, 180, 190)
@@ -161,11 +193,47 @@ cameraToggleButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Вращение камеры правой кнопкой мыши
+-- Сенсорное управление камерой для мобильных устройств
+local activeTouches = {} -- input -> position
+local touchDragging = false
+local lastTouch1Pos = nil
+local lastPinchDistance = nil
+
+-- Подсчёт активных касаний
+local function getActiveTouchCount()
+	local count = 0
+	for _ in pairs(activeTouches) do
+		count += 1
+	end
+	return count
+end
+
+-- Получить массив позиций всех активных касаний
+local function getActiveTouchPositions()
+	local positions = {}
+	for _, pos in pairs(activeTouches) do
+		table.insert(positions, pos)
+	end
+	return positions
+end
+
+-- Вращение камеры правой кнопкой мыши или касанием
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if cameraModeEnabled and input.UserInputType == Enum.UserInputType.MouseButton2 then
 		rightMouseDragging = true
 		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+	elseif cameraModeEnabled and input.UserInputType == Enum.UserInputType.Touch then
+		activeTouches[input] = input.Position
+		local count = getActiveTouchCount()
+		if count == 1 then
+			touchDragging = true
+			lastTouch1Pos = input.Position
+			lastPinchDistance = nil
+		elseif count == 2 then
+			touchDragging = false
+			local positions = getActiveTouchPositions()
+			lastPinchDistance = (positions[1] - positions[2]).Magnitude
+		end
 	end
 end)
 
@@ -173,10 +241,23 @@ UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 then
 		rightMouseDragging = false
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	elseif input.UserInputType == Enum.UserInputType.Touch then
+		activeTouches[input] = nil
+		local count = getActiveTouchCount()
+		if count == 0 then
+			touchDragging = false
+			lastTouch1Pos = nil
+			lastPinchDistance = nil
+		elseif count == 1 then
+			touchDragging = true
+			local positions = getActiveTouchPositions()
+			lastTouch1Pos = positions[1]
+			lastPinchDistance = nil
+		end
 	end
 end)
 
--- Вращение (движение мыши с ПКМ) и зум (колёсико)
+-- Вращение (движение мыши с ПКМ / касание) и зум (колёсико / пинч)
 UserInputService.InputChanged:Connect(function(input, gameProcessed)
 	if not cameraModeEnabled then return end
 	if input.UserInputType == Enum.UserInputType.MouseMovement and rightMouseDragging then
@@ -187,6 +268,23 @@ UserInputService.InputChanged:Connect(function(input, gameProcessed)
 	elseif input.UserInputType == Enum.UserInputType.MouseWheel then
 		cameraDistance = math.clamp(cameraDistance - input.Position.Z * 5, 5, 200)
 		updateCameraCFrame()
+	elseif input.UserInputType == Enum.UserInputType.Touch then
+		activeTouches[input] = input.Position
+		local count = getActiveTouchCount()
+		if count == 1 and touchDragging and lastTouch1Pos then
+			local delta = input.Position - lastTouch1Pos
+			cameraYaw = cameraYaw - delta.X * 0.008
+			cameraPitch = math.clamp(cameraPitch - delta.Y * 0.008, math.rad(-85), math.rad(85))
+			lastTouch1Pos = input.Position
+			updateCameraCFrame()
+		elseif count == 2 and lastPinchDistance then
+			local positions = getActiveTouchPositions()
+			local currentDist = (positions[1] - positions[2]).Magnitude
+			local pinchDelta = currentDist - lastPinchDistance
+			cameraDistance = math.clamp(cameraDistance - pinchDelta * 0.5, 5, 200)
+			lastPinchDistance = currentDist
+			updateCameraCFrame()
+		end
 	end
 end)
 
@@ -318,8 +416,8 @@ uiListLayout.Padding = UDim.new(0, 3)
 
 -- Правая панель
 local contentFrame = Instance.new("Frame")
-contentFrame.Size = UDim2.new(0, 230, 0, 260)
-contentFrame.Position = UDim2.new(0.01, 180, 0.05, 0)
+contentFrame.Size = UDim2.new(0, 180, 0, 200)
+contentFrame.Position = UDim2.new(0.01, 140, 0.05, 0)
 contentFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
 contentFrame.BorderSizePixel = 0
 contentFrame.Parent = screenGui
@@ -360,7 +458,7 @@ backCorner.CornerRadius = UDim.new(0, 6)
 backCorner.Parent = backButton
 
 local breadcrumbLabel = Instance.new("TextLabel")
-breadcrumbLabel.Size = UDim2.new(1, -40, 1, 0)
+breadcrumbLabel.Size = UDim2.new(1, -36, 1, 0)
 breadcrumbLabel.Position = UDim2.new(0, 36, 0, 0)
 breadcrumbLabel.BackgroundTransparency = 1
 breadcrumbLabel.Text = "Workspace"
@@ -448,8 +546,8 @@ contentLayout.Padding = UDim.new(0, 3)
 
 -- 3-я панель: Свойства объекта (как в Properties)
 local propsFrame = Instance.new("Frame")
-propsFrame.Size = UDim2.new(0, 230, 0, 260)
-propsFrame.Position = UDim2.new(0.01, 420, 0.05, 0)
+propsFrame.Size = UDim2.new(0, 180, 0, 200)
+propsFrame.Position = UDim2.new(0.01, 330, 0.05, 0)
 propsFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
 propsFrame.BorderSizePixel = 0
 propsFrame.Parent = screenGui
@@ -475,7 +573,7 @@ propsHeaderCorner.CornerRadius = UDim.new(0, 8)
 propsHeaderCorner.Parent = propsHeader
 
 local propsTitle = Instance.new("TextLabel")
-propsTitle.Size = UDim2.new(1, -8, 1, 0)
+propsTitle.Size = UDim2.new(1, -12, 1, 0)
 propsTitle.Position = UDim2.new(0, 8, 0, 0)
 propsTitle.BackgroundTransparency = 1
 propsTitle.Text = "Свойства"
@@ -502,6 +600,41 @@ propsLayout.SortOrder = Enum.SortOrder.LayoutOrder
 propsLayout.Padding = UDim.new(0, 2)
 
 
+
+-- Переключение видимости 2-й и 3-й панели с первой панели
+local contentVisible = true
+local propsVisible = true
+
+local function updateToggleVisuals()
+	if contentVisible then
+		toggleContentBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 60)
+		toggleContentBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	else
+		toggleContentBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+		toggleContentBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
+	end
+	if propsVisible then
+		togglePropsBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 60)
+		togglePropsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	else
+		togglePropsBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+		togglePropsBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
+	end
+end
+
+updateToggleVisuals()
+
+toggleContentBtn.MouseButton1Click:Connect(function()
+	contentVisible = not contentVisible
+	contentFrame.Visible = contentVisible
+	updateToggleVisuals()
+end)
+
+togglePropsBtn.MouseButton1Click:Connect(function()
+	propsVisible = not propsVisible
+	propsFrame.Visible = propsVisible
+	updateToggleVisuals()
+end)
 
 local function addPropRow(propName, propValue, order, liveGetter)
 	local row = Instance.new("Frame")
