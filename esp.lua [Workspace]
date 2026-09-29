@@ -12,6 +12,8 @@ local currentHighlights = {}
 local currentFolderConnections = {}
 local highlightedObject = nil -- для переключения подсветки
 local clickSelectEnabled = false -- выбор объектов кликом в 3D мире
+local cameraModeEnabled = false -- режим камеры: при выборе объекта камера летит к нему
+local lastSelectedObject = nil -- последний выбранный объект (для ТП)
 
 -- GUI
 local screenGui = Instance.new("ScreenGui")
@@ -63,7 +65,7 @@ title.Parent = panelHeader
 local clickToggleButton = Instance.new("TextButton")
 clickToggleButton.Name = "ClickSelectToggle"
 clickToggleButton.Size = UDim2.new(0, 28, 0, 20)
-clickToggleButton.Position = UDim2.new(1, -32, 0.5, -10)
+clickToggleButton.Position = UDim2.new(1, -62, 0.5, -10)
 clickToggleButton.Text = "🖱"
 clickToggleButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
 clickToggleButton.TextColor3 = Color3.fromRGB(180, 180, 190)
@@ -93,6 +95,101 @@ local function updateToggleVisual()
 end
 
 updateToggleVisual()
+
+-- Кнопка переключения режима камеры
+local cameraToggleButton = Instance.new("TextButton")
+cameraToggleButton.Name = "CameraModeToggle"
+cameraToggleButton.Size = UDim2.new(0, 28, 0, 20)
+cameraToggleButton.Position = UDim2.new(1, -32, 0.5, -10)
+cameraToggleButton.Text = "📷"
+cameraToggleButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+cameraToggleButton.TextColor3 = Color3.fromRGB(180, 180, 190)
+cameraToggleButton.TextScaled = true
+cameraToggleButton.Font = Enum.Font.SourceSansBold
+cameraToggleButton.Parent = panelHeader
+
+local camToggleCorner = Instance.new("UICorner")
+camToggleCorner.CornerRadius = UDim.new(0, 6)
+camToggleCorner.Parent = cameraToggleButton
+
+local camToggleStroke = Instance.new("UIStroke")
+camToggleStroke.Color = Color3.fromRGB(120, 120, 135)
+camToggleStroke.Thickness = 1
+camToggleStroke.Parent = cameraToggleButton
+
+local function updateCameraToggleVisual()
+	if cameraModeEnabled then
+		cameraToggleButton.BackgroundColor3 = Color3.fromRGB(40, 100, 200)
+		cameraToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		camToggleStroke.Color = Color3.fromRGB(80, 160, 255)
+	else
+		cameraToggleButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+		cameraToggleButton.TextColor3 = Color3.fromRGB(180, 180, 190)
+		camToggleStroke.Color = Color3.fromRGB(120, 120, 135)
+	end
+end
+
+updateCameraToggleVisual()
+
+cameraToggleButton.MouseButton1Click:Connect(function()
+	cameraModeEnabled = not cameraModeEnabled
+	updateCameraToggleVisual()
+	if not cameraModeEnabled then
+		local camera = Workspace.CurrentCamera
+		if camera then
+			camera.CameraType = Enum.CameraType.Custom
+		end
+	end
+end)
+
+-- Функции камеры и телепорта
+local TweenService = game:GetService("TweenService")
+
+local function getObjectPosition(obj)
+	if obj:IsA("BasePart") then
+		return obj.Position
+	elseif obj:IsA("Model") then
+		if obj.PrimaryPart then
+			return obj.PrimaryPart.Position
+		else
+			local cf = obj:GetBoundingBox()
+			return cf.Position
+		end
+	else
+		return obj:GetPivot().Position
+	end
+end
+
+local function focusCameraOnObject(obj)
+	if not cameraModeEnabled then return end
+	local camera = Workspace.CurrentCamera
+	if not camera then return end
+	local targetPos = getObjectPosition(obj)
+	local offset = Vector3.new(20, 20, 20)
+	local cameraPos = targetPos + offset
+	camera.CameraType = Enum.CameraType.Scriptable
+	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local tween = TweenService:Create(camera, tweenInfo, {CFrame = CFrame.lookAt(cameraPos, targetPos)})
+	tween:Play()
+end
+
+local function teleportToObject()
+	if not lastSelectedObject then return end
+	local char = player.Character
+	if not char then return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local targetPos = getObjectPosition(lastSelectedObject)
+	hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
+	if cameraModeEnabled then
+		cameraModeEnabled = false
+		updateCameraToggleVisual()
+		local camera = Workspace.CurrentCamera
+		if camera then
+			camera.CameraType = Enum.CameraType.Custom
+		end
+	end
+end
 
 local panelScroll = Instance.new("ScrollingFrame")
 panelScroll.Name = "PanelScroll"
@@ -183,6 +280,29 @@ pathCorner.CornerRadius = UDim.new(0, 6)
 pathCorner.Parent = pathLabel
 pathLabel.Parent = contentFrame
 
+-- Кнопка телепорта
+local tpButton = Instance.new("TextButton")
+tpButton.Name = "TeleportButton"
+tpButton.Size = UDim2.new(1, -8, 0, 24)
+tpButton.Position = UDim2.new(0, 4, 0, 56)
+tpButton.Text = "ТП к объекту"
+tpButton.BackgroundColor3 = Color3.fromRGB(80, 40, 120)
+tpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpButton.TextScaled = true
+tpButton.Font = Enum.Font.SourceSansBold
+tpButton.Parent = contentFrame
+
+local tpCorner = Instance.new("UICorner")
+tpCorner.CornerRadius = UDim.new(0, 6)
+tpCorner.Parent = tpButton
+
+local tpStroke = Instance.new("UIStroke")
+tpStroke.Color = Color3.fromRGB(140, 100, 180)
+tpStroke.Thickness = 1
+tpStroke.Parent = tpButton
+
+tpButton.MouseButton1Click:Connect(teleportToObject)
+
 -- Переключение выбора по клику
 clickToggleButton.MouseButton1Click:Connect(function()
 	clickSelectEnabled = not clickSelectEnabled
@@ -195,8 +315,8 @@ clickToggleButton.MouseButton1Click:Connect(function()
 end)
 
 local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, -8, 1, -62)
-scrollFrame.Position = UDim2.new(0, 4, 0, 58)
+scrollFrame.Size = UDim2.new(1, -8, 1, -86)
+scrollFrame.Position = UDim2.new(0, 4, 0, 84)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.BorderSizePixel = 0
 scrollFrame.Parent = contentFrame
@@ -350,8 +470,10 @@ local function navigateInto(obj)
 		table.insert(navigationHistory, {obj = currentObject})
 	end
 	currentObject = obj
+	lastSelectedObject = obj
 	showObjectContents(obj)
 	highlightObject(obj, Workspace)
+	focusCameraOnObject(obj)
 	updateBreadcrumb()
 end
 
@@ -359,8 +481,10 @@ local function navigateBack()
 	if #navigationHistory > 0 then
 		local prev = table.remove(navigationHistory)
 		currentObject = prev.obj
+		lastSelectedObject = prev.obj
 		showObjectContents(prev.obj)
 		highlightObject(prev.obj, Workspace)
+		focusCameraOnObject(prev.obj)
 		updateBreadcrumb()
 	end
 end
@@ -395,8 +519,10 @@ local function createObjectButton(obj, count)
 	btn.MouseButton1Click:Connect(function()
 		navigationHistory = {}
 		currentObject = obj
+		lastSelectedObject = obj
 		showObjectContents(obj)
 		highlightObject(obj, Workspace)
+		focusCameraOnObject(obj)
 		updateBreadcrumb()
 	end)
 end
@@ -504,10 +630,12 @@ function showObjectContents(obj)
 		end
 
 		childBtn.MouseButton1Click:Connect(function()
+			lastSelectedObject = child
 			if hasChildren then
 				navigateInto(child)
 			else
 				highlightObject(child, obj)
+				focusCameraOnObject(child)
 			end
 		end)
 	end
@@ -560,59 +688,61 @@ end
 
 local function scanWorkspace()
 
--- Клик по объекту в 3D мире: подсветка + показ пути
-local character = player.Character or player.CharacterAdded:Wait()
+	-- Клик по объекту в 3D мире: подсветка + показ пути
+	local character = player.Character or player.CharacterAdded:Wait()
 
-local function isCharacterPart(instance)
-	local char = player.Character
-	if not char then return false end
-	local current = instance
-	while current do
-		if current == char then return true end
-		current = current.Parent
-	end
-	return false
-end
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-	if not clickSelectEnabled then return end
-
-	local mousePos = UserInputService:GetMouseLocation()
-	local camera = Workspace.CurrentCamera
-	local unitRay = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-
-	local rayParams = RaycastParams.new()
-	rayParams.IgnoreWater = true
-
-	local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, rayParams)
-	if result then
-		local hitPart = result.Instance
-
-		-- Игнорировать части персонажа игрока
-		if isCharacterPart(hitPart) then return end
-
-		-- Найти верхнеуровневый объект (Model/Folder) внутри Workspace
-		local targetObj = hitPart
-		local parent = hitPart.Parent
-		while parent and parent ~= Workspace and parent ~= game do
-			if parent:IsA("Model") or parent:IsA("Folder") then
-				targetObj = parent
-			end
-			parent = parent.Parent
+	local function isCharacterPart(instance)
+		local char = player.Character
+		if not char then return false end
+		local current = instance
+		while current do
+			if current == char then return true end
+			current = current.Parent
 		end
-
-		highlightObject(targetObj, Workspace)
-		pathLabel.Text = targetObj:GetFullName()
-
-		-- Обновить навигацию в панели
-		navigationHistory = {}
-		currentObject = targetObj
-		showObjectContents(targetObj)
-		updateBreadcrumb()
+		return false
 	end
-end)
+
+	UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then return end
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		if not clickSelectEnabled then return end
+
+		local mousePos = UserInputService:GetMouseLocation()
+		local camera = Workspace.CurrentCamera
+		local unitRay = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+
+		local rayParams = RaycastParams.new()
+		rayParams.IgnoreWater = true
+
+		local result = Workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, rayParams)
+		if result then
+			local hitPart = result.Instance
+
+			-- Игнорировать части персонажа игрока
+			if isCharacterPart(hitPart) then return end
+
+			-- Найти верхнеуровневый объект (Model/Folder) внутри Workspace
+			local targetObj = hitPart
+			local parent = hitPart.Parent
+			while parent and parent ~= Workspace and parent ~= game do
+				if parent:IsA("Model") or parent:IsA("Folder") then
+					targetObj = parent
+				end
+				parent = parent.Parent
+			end
+
+			highlightObject(targetObj, Workspace)
+			pathLabel.Text = targetObj:GetFullName()
+			lastSelectedObject = targetObj
+			focusCameraOnObject(targetObj)
+
+			-- Обновить навигацию в панели
+			navigationHistory = {}
+			currentObject = targetObj
+			showObjectContents(targetObj)
+			updateBreadcrumb()
+		end
+	end)
 	local function refreshObjectList()
 		for _, child in pairs(panelScroll:GetChildren()) do
 			if child:IsA("TextButton") then
