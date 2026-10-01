@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -15,6 +16,7 @@ local highlightedObject = nil -- для переключения подсвет�
 local clickSelectEnabled = false -- выбор объектов кликом в 3D мире
 local cameraModeEnabled = false -- режим камеры: при выборе объекта камера летит к нему
 local lastSelectedObject = nil -- последний выбранный объект (для ТП)
+local highlightEnabled = true -- подсветка объектов включена
 
 -- Состояние орбитальной камеры
 local cameraTargetPos = Vector3.new(0, 0, 0)
@@ -63,7 +65,7 @@ headerCorner.CornerRadius = UDim.new(0, 8)
 headerCorner.Parent = panelHeader
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -84, 1, 0)
+title.Size = UDim2.new(1, -104, 1, 0)
 title.Position = UDim2.new(0, 8, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = "Объекты"
@@ -192,6 +194,27 @@ cameraToggleButton.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+
+-- Кнопка переключения подсветки объектов
+local highlightToggleButton = Instance.new("TextButton")
+highlightToggleButton.Name = "HighlightToggle"
+highlightToggleButton.Size = UDim2.new(0, 18, 0, 20)
+highlightToggleButton.Position = UDim2.new(1, -100, 0.5, -10)
+highlightToggleButton.Text = "💡"
+highlightToggleButton.BackgroundColor3 = Color3.fromRGB(200, 160, 40)
+highlightToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+highlightToggleButton.TextScaled = true
+highlightToggleButton.Font = Enum.Font.SourceSansBold
+highlightToggleButton.Parent = panelHeader
+
+local hlToggleCorner = Instance.new("UICorner")
+hlToggleCorner.CornerRadius = UDim.new(0, 6)
+hlToggleCorner.Parent = highlightToggleButton
+
+local hlToggleStroke = Instance.new("UIStroke")
+hlToggleStroke.Color = Color3.fromRGB(255, 220, 90)
+hlToggleStroke.Thickness = 1
+hlToggleStroke.Parent = highlightToggleButton
 
 -- Сенсорное управление камерой для мобильных устройств
 local activeTouches = {} -- input -> position
@@ -906,6 +929,18 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
+local function updateHighlightToggleVisual()
+	if highlightEnabled then
+		highlightToggleButton.BackgroundColor3 = Color3.fromRGB(200, 160, 40)
+		highlightToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+		hlToggleStroke.Color = Color3.fromRGB(255, 220, 90)
+	else
+		highlightToggleButton.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+		highlightToggleButton.TextColor3 = Color3.fromRGB(180, 180, 190)
+		hlToggleStroke.Color = Color3.fromRGB(120, 120, 135)
+	end
+end
+
 -- Подсветка объектов
 local function clearHighlights()
 	for _, h in pairs(currentHighlights) do
@@ -917,6 +952,12 @@ local function clearHighlights()
 end
 
 local function highlightObject(obj, searchParent)
+	-- Подсветка выключена кнопкой — очистить и не подсвечивать
+	if not highlightEnabled then
+		clearHighlights()
+		highlightedObject = nil
+		return
+	end
 	-- Повторное нажатие — выключить подсветку
 	if highlightedObject == obj then
 		clearHighlights()
@@ -953,6 +994,21 @@ local function highlightObject(obj, searchParent)
 		end
 	end
 end
+
+-- Обработка нажатия кнопки подсветки
+highlightToggleButton.MouseButton1Click:Connect(function()
+	highlightEnabled = not highlightEnabled
+	updateHighlightToggleVisual()
+	if not highlightEnabled then
+		-- Выключаем: снять текущую подсветку
+		clearHighlights()
+		highlightedObject = nil
+	elseif lastSelectedObject and lastSelectedObject.Parent then
+		-- Включаем: подсветить последний выбранный объект
+		highlightedObject = nil
+		highlightObject(lastSelectedObject, Workspace)
+	end
+end)
 
 local function clearContent(frame)
 	for _, child in pairs(frame:GetChildren()) do
