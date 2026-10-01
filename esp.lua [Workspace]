@@ -1,3 +1,4 @@
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -219,10 +220,14 @@ end
 
 -- Вращение камеры правой кнопкой мыши или касанием
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if cameraModeEnabled and input.UserInputType == Enum.UserInputType.MouseButton2 then
+	if not cameraModeEnabled then return end
+	-- Игнорировать касания по GUI (панели, джойстик движения),
+	-- иначе они засчитываются как пальцы камеры и ломают вращение на телефоне
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
 		rightMouseDragging = true
 		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
-	elseif cameraModeEnabled and input.UserInputType == Enum.UserInputType.Touch then
+	elseif input.UserInputType == Enum.UserInputType.Touch then
 		activeTouches[input] = input.Position
 		local count = getActiveTouchCount()
 		if count == 1 then
@@ -269,6 +274,8 @@ UserInputService.InputChanged:Connect(function(input, gameProcessed)
 		cameraDistance = math.clamp(cameraDistance - input.Position.Z * 5, 5, 200)
 		updateCameraCFrame()
 	elseif input.UserInputType == Enum.UserInputType.Touch then
+		-- Обновляем только касания, начатые вне GUI (они уже есть в activeTouches)
+		if not activeTouches[input] then return end
 		activeTouches[input] = input.Position
 		local count = getActiveTouchCount()
 		if count == 1 and touchDragging and lastTouch1Pos then
@@ -998,14 +1005,10 @@ end
 
 backButton.MouseButton1Click:Connect(navigateBack)
 
-local function createObjectButton(obj, count)
+local function createObjectButton(obj)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, 0, 0, 24)
-	if count and count > 1 then
-		btn.Text = obj.Name .. " ×" .. count
-	else
-		btn.Text = obj.Name
-	end
+	btn.Text = obj.Name
 	btn.BackgroundColor3 = getColorByType(obj)
 	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
 	btn.TextScaled = true
@@ -1092,7 +1095,7 @@ function showObjectContents(obj)
 	childrenHeader.Parent = scrollFrame
 
 	-- Кликабельная запись дочернего объекта
-	local function addChildEntry(child, count)
+	local function addChildEntry(child)
 		local childBtn = Instance.new("TextButton")
 		childBtn.Size = UDim2.new(1, 0, 0, 24)
 		childBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
@@ -1112,11 +1115,7 @@ function showObjectContents(obj)
 		label.TextColor3 = Color3.fromRGB(255, 255, 255)
 		label.TextScaled = true
 		label.Font = Enum.Font.SourceSans
-		if count and count > 1 then
-			label.Text = child.Name .. " " .. getLabelTextByType(child) .. " ×" .. count
-		else
-			label.Text = child.Name .. " " .. getLabelTextByType(child)
-		end
+		label.Text = child.Name .. " " .. getLabelTextByType(child)
 		label.Parent = childBtn
 
 		local colorBox = Instance.new("Frame")
@@ -1161,28 +1160,9 @@ function showObjectContents(obj)
 			end
 		end
 
-		local children = {}
+		-- Каждый объект отображается отдельной записью (без группировки одинаковых имён)
 		for _, c in pairs(obj:GetChildren()) do
-			table.insert(children, c)
-		end
-
-		local nameCounts = {}
-		local nameFirstChild = {}
-		for _, c in pairs(children) do
-			local n = c.Name
-			nameCounts[n] = (nameCounts[n] or 0) + 1
-			if not nameFirstChild[n] then
-				nameFirstChild[n] = c
-			end
-		end
-
-		local displayedNames = {}
-		for _, c in pairs(children) do
-			local n = c.Name
-			if not displayedNames[n] then
-				displayedNames[n] = true
-				addChildEntry(nameFirstChild[n], nameCounts[n])
-			end
+			addChildEntry(c)
 		end
 	end
 
@@ -1263,26 +1243,10 @@ local function scanWorkspace()
 			end
 		end
 
-		local nameCounts = {}
-		local nameFirstObj = {}
+		-- Каждый объект отображается отдельной записью (без группировки одинаковых имён)
 		for _, obj in pairs(Workspace:GetChildren()) do
 			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
-				local n = obj.Name
-				nameCounts[n] = (nameCounts[n] or 0) + 1
-				if not nameFirstObj[n] then
-					nameFirstObj[n] = obj
-				end
-			end
-		end
-
-		local displayedNames = {}
-		for _, obj in pairs(Workspace:GetChildren()) do
-			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
-				local n = obj.Name
-				if not displayedNames[n] then
-					displayedNames[n] = true
-					createObjectButton(nameFirstObj[n], nameCounts[n])
-				end
+				createObjectButton(obj)
 			end
 		end
 	end
