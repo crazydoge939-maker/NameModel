@@ -1028,11 +1028,12 @@ end
 
 backButton.MouseButton1Click:Connect(navigateBack)
 
-local function createObjectButton(obj, order)
+local function createObjectButton(obj, order, count)
+	count = count or 1
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, 0, 0, 24)
 	btn.LayoutOrder = order or 0
-	btn.Text = obj.Name
+	btn.Text = obj.Name .. (count > 1 and (" x" .. count) or "")
 	btn.BackgroundColor3 = getColorByType(obj)
 	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
 	btn.TextScaled = true
@@ -1118,8 +1119,9 @@ function showObjectContents(obj)
 	childrenHeader.LayoutOrder = 3
 	childrenHeader.Parent = scrollFrame
 
-	-- Кликабельная запись дочернего объекта
-	local function addChildEntry(child)
+	-- Кликабельная запись дочернего объекта (count — количество одинаковых объектов в стаке)
+	local function addChildEntry(child, count)
+		count = count or 1
 		local childBtn = Instance.new("TextButton")
 		childBtn.Size = UDim2.new(1, 0, 0, 24)
 		childBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
@@ -1139,7 +1141,8 @@ function showObjectContents(obj)
 		label.TextColor3 = Color3.fromRGB(255, 255, 255)
 		label.TextScaled = true
 		label.Font = Enum.Font.SourceSans
-		label.Text = child.Name .. " " .. getLabelTextByType(child)
+		local stackText = count > 1 and (" x" .. count) or ""
+		label.Text = child.Name .. " " .. getLabelTextByType(child) .. stackText
 		label.Parent = childBtn
 
 		local colorBox = Instance.new("Frame")
@@ -1184,9 +1187,22 @@ function showObjectContents(obj)
 			end
 		end
 
-		-- Каждый объект отображается отдельной записью (без группировки одинаковых имён)
+		-- Стакание одинаковых объектов: группировка по имени со счётчиком количества (xN)
+		local groups = {}
+		local groupOrder = {}
 		for _, c in pairs(obj:GetChildren()) do
-			addChildEntry(c)
+			local g = groups[c.Name]
+			if g then
+				g.count += 1
+			else
+				groups[c.Name] = {first = c, count = 1}
+				table.insert(groupOrder, c.Name)
+			end
+		end
+		table.sort(groupOrder)
+		for _, name in ipairs(groupOrder) do
+			local g = groups[name]
+			addChildEntry(g.first, g.count)
 		end
 	end
 
@@ -1261,10 +1277,11 @@ local function scanWorkspace()
 		end
 	end)
 	-- Кнопка результата поиска (работает с любым типом объектов, включая не физические)
-	local function createSearchResultButton(obj, order)
+	local function createSearchResultButton(obj, order, count)
+		count = count or 1
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(1, 0, 0, 24)
-		btn.Text = obj.Name .. " [" .. obj.ClassName .. "]"
+		btn.Text = obj.Name .. " [" .. obj.ClassName .. "]" .. (count > 1 and (" x" .. count) or "")
 		btn.BackgroundColor3 = Color3.fromRGB(45, 90, 60)
 		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 		btn.TextScaled = true
@@ -1318,35 +1335,57 @@ local function scanWorkspace()
 
 			table.sort(results, function(a, b) return a.Name < b.Name end)
 
+			-- Стакание одинаковых результатов: группировка по имени со счётчиком
+			local grouped = {}
+			local groupOrder = {}
+			for _, r in ipairs(results) do
+				local g = grouped[r.Name]
+				if g then
+					g.count += 1
+				else
+					grouped[r.Name] = {first = r, count = 1}
+					table.insert(groupOrder, r.Name)
+				end
+			end
+
 			local infoLabel = Instance.new("TextLabel")
 			infoLabel.Size = UDim2.new(1, 0, 0, 20)
 			infoLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 			infoLabel.TextColor3 = Color3.fromRGB(255, 255, 200)
 			infoLabel.TextScaled = true
 			infoLabel.Font = Enum.Font.SourceSansBold
-			infoLabel.Text = "Найдено: " .. #results .. (truncated and "+" or "")
+			infoLabel.Text = "Найдено: " .. #results .. (truncated and "+" or "") .. " (групп: " .. #groupOrder .. ")"
 			infoLabel.LayoutOrder = 0
 			infoLabel.Parent = panelScroll
 			local infoCorner = Instance.new("UICorner")
 			infoCorner.CornerRadius = UDim.new(0, 5)
 			infoCorner.Parent = infoLabel
 
-			for i, obj in ipairs(results) do
-				createSearchResultButton(obj, i)
+			for i, name in ipairs(groupOrder) do
+				local g = grouped[name]
+				createSearchResultButton(g.first, i, g.count)
 			end
 			return
 		end
 
-		-- Обычный список (поиск пуст) — каждый объект отдельной записью, сортировка по имени
-		local objects = {}
+		-- Обычный список (поиск пуст) — стакание одинаковых объектов: группировка по имени со счётчиком
+		local groups = {}
+		local groupOrder = {}
 		for _, obj in pairs(Workspace:GetChildren()) do
 			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
-				table.insert(objects, obj)
+				local g = groups[obj.Name]
+				if g then
+					g.count += 1
+				else
+					groups[obj.Name] = {first = obj, count = 1}
+					table.insert(groupOrder, obj.Name)
+				end
 			end
 		end
-		table.sort(objects, function(a, b) return a.Name < b.Name end)
-		for i, obj in ipairs(objects) do
-			createObjectButton(obj, i)
+		table.sort(groupOrder)
+		for i, name in ipairs(groupOrder) do
+			local g = groups[name]
+			createObjectButton(g.first, i, g.count)
 		end
 	end
 
