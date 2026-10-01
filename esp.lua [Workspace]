@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -404,10 +403,34 @@ local function teleportToObject()
 	end
 end
 
+-- Поле поиска объектов (ищет и физические, и не физические: ProximityPrompt, SurfaceGui и т.д.)
+local searchBox = Instance.new("TextBox")
+searchBox.Name = "SearchBox"
+searchBox.Size = UDim2.new(1, -8, 0, 22)
+searchBox.Position = UDim2.new(0, 4, 0, 32)
+searchBox.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+searchBox.TextColor3 = Color3.fromRGB(235, 235, 245)
+searchBox.PlaceholderText = "🔍 Поиск: класс/имя"
+searchBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 145)
+searchBox.Text = ""
+searchBox.TextScaled = true
+searchBox.Font = Enum.Font.SourceSans
+searchBox.ClearTextOnFocus = false
+searchBox.Parent = panel
+
+local searchCorner = Instance.new("UICorner")
+searchCorner.CornerRadius = UDim.new(0, 6)
+searchCorner.Parent = searchBox
+
+local searchStroke = Instance.new("UIStroke")
+searchStroke.Color = Color3.fromRGB(90, 90, 110)
+searchStroke.Thickness = 1
+searchStroke.Parent = searchBox
+
 local panelScroll = Instance.new("ScrollingFrame")
 panelScroll.Name = "PanelScroll"
-panelScroll.Size = UDim2.new(1, -8, 1, -36)
-panelScroll.Position = UDim2.new(0, 4, 0, 32)
+panelScroll.Size = UDim2.new(1, -8, 1, -62)
+panelScroll.Position = UDim2.new(0, 4, 0, 58)
 panelScroll.BackgroundTransparency = 1
 panelScroll.BorderSizePixel = 0
 panelScroll.ScrollBarThickness = 3
@@ -418,7 +441,7 @@ panelScroll.Parent = panel
 
 local uiListLayout = Instance.new("UIListLayout")
 uiListLayout.Parent = panelScroll
-uiListLayout.SortOrder = Enum.SortOrder.Name
+uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 uiListLayout.Padding = UDim.new(0, 3)
 
 -- Правая панель
@@ -1005,9 +1028,10 @@ end
 
 backButton.MouseButton1Click:Connect(navigateBack)
 
-local function createObjectButton(obj)
+local function createObjectButton(obj, order)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, 0, 0, 24)
+	btn.LayoutOrder = order or 0
 	btn.Text = obj.Name
 	btn.BackgroundColor3 = getColorByType(obj)
 	btn.TextColor3 = Color3.fromRGB(0, 0, 0)
@@ -1236,20 +1260,100 @@ local function scanWorkspace()
 			updateBreadcrumb()
 		end
 	end)
+	-- Кнопка результата поиска (работает с любым типом объектов, включая не физические)
+	local function createSearchResultButton(obj, order)
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, 0, 0, 24)
+		btn.Text = obj.Name .. " [" .. obj.ClassName .. "]"
+		btn.BackgroundColor3 = Color3.fromRGB(45, 90, 60)
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.TextScaled = true
+		btn.Font = Enum.Font.SourceSans
+		btn.LayoutOrder = order
+		btn.Parent = panelScroll
+
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 5)
+		btnCorner.Parent = btn
+
+		btn.MouseButton1Click:Connect(function()
+			navigationHistory = {}
+			currentObject = obj
+			lastSelectedObject = obj
+			showObjectContents(obj)
+			highlightObject(obj, Workspace)
+			focusCameraOnObject(obj)
+			updateBreadcrumb()
+			-- Показать полный путь к найденному объекту во 2-й панели
+			pathLabel.Text = "Путь: " .. obj:GetFullName()
+		end)
+	end
+
 	local function refreshObjectList()
 		for _, child in pairs(panelScroll:GetChildren()) do
-			if child:IsA("TextButton") then
+			if child:IsA("TextButton") or child:IsA("TextLabel") then
 				child:Destroy()
 			end
 		end
 
-		-- Каждый объект отображается отдельной записью (без группировки одинаковых имён)
+		local query = searchBox.Text
+
+		if query ~= "" then
+			-- Глубокий поиск по всем потомкам Workspace: совпадение по имени или по классу
+			-- (Part, Union, ProximityPrompt, SurfaceGui, BillboardGui, Script и т.д.)
+			local lowerQuery = string.lower(query)
+			local results = {}
+			local truncated = false
+			for _, desc in pairs(Workspace:GetDescendants()) do
+				local lname = string.lower(desc.Name)
+				local lclass = string.lower(desc.ClassName)
+				if string.find(lname, lowerQuery, 1, true) or string.find(lclass, lowerQuery, 1, true) then
+					table.insert(results, desc)
+					if #results >= 300 then
+						truncated = true
+						break
+					end
+				end
+			end
+
+			table.sort(results, function(a, b) return a.Name < b.Name end)
+
+			local infoLabel = Instance.new("TextLabel")
+			infoLabel.Size = UDim2.new(1, 0, 0, 20)
+			infoLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+			infoLabel.TextColor3 = Color3.fromRGB(255, 255, 200)
+			infoLabel.TextScaled = true
+			infoLabel.Font = Enum.Font.SourceSansBold
+			infoLabel.Text = "Найдено: " .. #results .. (truncated and "+" or "")
+			infoLabel.LayoutOrder = 0
+			infoLabel.Parent = panelScroll
+			local infoCorner = Instance.new("UICorner")
+			infoCorner.CornerRadius = UDim.new(0, 5)
+			infoCorner.Parent = infoLabel
+
+			for i, obj in ipairs(results) do
+				createSearchResultButton(obj, i)
+			end
+			return
+		end
+
+		-- Обычный список (поиск пуст) — каждый объект отдельной записью, сортировка по имени
+		local objects = {}
 		for _, obj in pairs(Workspace:GetChildren()) do
 			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
-				createObjectButton(obj)
+				table.insert(objects, obj)
 			end
 		end
+		table.sort(objects, function(a, b) return a.Name < b.Name end)
+		for i, obj in ipairs(objects) do
+			createObjectButton(obj, i)
+		end
 	end
+
+	-- Живое обновление результатов поиска при вводе текста
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		refreshObjectList()
+	end)
 
 	refreshObjectList()
 
