@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -1425,10 +1424,11 @@ local function scanWorkspace()
 		end
 
 		-- Обычный список (поиск пуст) — стакание одинаковых объектов: группировка по имени со счётчиком
+		-- Показываются все типы объектов, включая не физические
 		local groups = {}
 		local groupOrder = {}
 		for _, obj in pairs(Workspace:GetChildren()) do
-			if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or obj:IsA("Model") or obj:IsA("Folder") then
+			if not (obj:IsA("Terrain") or obj:IsA("Camera")) then
 				local g = groups[obj.Name]
 				if g then
 					g.count += 1
@@ -1452,11 +1452,46 @@ local function scanWorkspace()
 
 	refreshObjectList()
 
-	Workspace.ChildAdded:Connect(function()
-		refreshObjectList()
+	-- Живое обновление списка при добавлении/удалении ЛЮБЫХ объектов в Workspace
+	-- (включая не физические: ProximityPrompt, SurfaceGui, BillboardGui, скрипты и т.д.),
+	-- где бы они ни находились — не только на верхнем уровне, но и внутри моделей/папок
+	local refreshScheduled = false
+	local function scheduleRefresh()
+		if refreshScheduled then return end
+		refreshScheduled = true
+		task.delay(0.3, function()
+			refreshScheduled = false
+			refreshObjectList()
+		end)
+	end
+
+	local function shouldTrackInstance(inst)
+		-- Не реагируем на подсветку (Highlight), созданную самим эксплорером — иначе будет лишняя перерисовка списка
+		if inst:IsA("Highlight") then return false end
+		-- Игнорируем части персонажа игрока
+		local char = player.Character
+		if char then
+			local current = inst
+			while current do
+				if current == char then return false end
+				current = current.Parent
+			end
+		end
+		return true
+	end
+
+	Workspace.DescendantAdded:Connect(function(inst)
+		if shouldTrackInstance(inst) then
+			scheduleRefresh()
+		end
 	end)
-	Workspace.ChildRemoved:Connect(function()
-		refreshObjectList()
+
+	-- DescendantRemoving — событие, срабатывающее перед удалением потомка
+	-- (DescendantRemoved не существует у Instance)
+	Workspace.DescendantRemoving:Connect(function(inst)
+		if shouldTrackInstance(inst) then
+			scheduleRefresh()
+		end
 	end)
 end
 
