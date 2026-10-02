@@ -323,23 +323,15 @@ local function isPhysicalObject(obj)
 end
 
 -- Корни поиска: Workspace и ReplicatedStorage.
--- ServerScriptService клиент не видит напрямую (ограничение Roblox),
--- поэтому серверный скрипт ServerScriptServiceMirror создаёт зеркало
--- его содержимого в ReplicatedStorage.ServerScriptServiceMirror.
-local function getSssMirror()
-	return ReplicatedStorage:FindFirstChild("ServerScriptServiceMirror")
-end
-
+-- ServerScriptService клиенту не реплицируется движком Roblox —
+-- его содержимое физически недоступно из LocalScript без серверного скрипта.
 local searchRoots = {Workspace, ReplicatedStorage}
 
 -- Определить корень объекта: возвращает (корень, имя корня для хлебных крошек)
 local function getRootOf(obj)
-	local sssMirror = getSssMirror()
 	local current = obj
 	while current do
-		if sssMirror and current == sssMirror then
-			return sssMirror, "ServerScriptService"
-		elseif current == ReplicatedStorage then
+		if current == ReplicatedStorage then
 			return ReplicatedStorage, "ReplicatedStorage"
 		elseif current == Workspace then
 			return Workspace, "Workspace"
@@ -347,6 +339,93 @@ local function getRootOf(obj)
 		current = current.Parent
 	end
 	return Workspace, "Workspace"
+end
+
+-- Поиск связанных RemoteEvent/RemoteFunction (эвристика).
+-- Roblox запрещает читать код скриптов во время игры (Source недоступен),
+-- поэтому связи определяются по структуре и именам:
+-- 1) ремоуты среди потомков скрипта; 2) ремоуты-соседи (тот же родитель);
+-- 3) совпадения имён (скрипт "BuyHandler" ↔ ремоут "BuyHandlerEvent").
+local function isRemote(inst)
+	return inst:IsA("RemoteEvent") or inst:IsA("RemoteFunction") or inst:IsA("UnreliableRemoteEvent")
+end
+
+local function findRelatedRemotes(scriptObj)
+	local found = {}
+	local list = {}
+	local function add(inst)
+		if #list >= 10 then return end
+		if isRemote(inst) and not found[inst] then
+			found[inst] = true
+			table.insert(list, inst)
+		end
+	end
+	-- 1. Потомки скрипта (ремоут внутри скрипта)
+	for _, d in ipairs(scriptObj:GetDescendants()) do
+		add(d)
+	end
+	-- 2. Соседи по папке (скрипт и ремоут лежат рядом)
+	local parent = scriptObj.Parent
+	if parent then
+		for _, sib in ipairs(parent:GetChildren()) do
+			if sib ~= scriptObj then
+				add(sib)
+			end
+		end
+	end
+	-- 3. Совпадение имён по всем корням
+	local lname = string.lower(scriptObj.Name)
+	if lname ~= "" then
+		for _, root in ipairs(searchRoots) do
+			for _, d in ipairs(root:GetDescendants()) do
+				if isRemote(d) then
+					local ld = string.lower(d.Name)
+					if ld == lname or string.find(ld, lname, 1, true) or string.find(lname, ld, 1, true) then
+						add(d)
+					end
+				end
+			end
+		end
+	end
+	return list
+end
+
+-- Обратно: скрипты, вероятно использующие данный ремоут
+local function findRelatedScripts(remoteObj)
+	local found = {}
+	local list = {}
+	local function add(inst)
+		if #list >= 10 then return end
+		if inst:IsA("BaseScript") and not found[inst] then
+			found[inst] = true
+			table.insert(list, inst)
+		end
+	end
+	-- 1. Скрипты рядом с ремоутом (родитель и его потомки)
+	local parent = remoteObj.Parent
+	if parent then
+		if parent:IsA("BaseScript") then
+			add(parent)
+		end
+		for _, d in ipairs(parent:GetDescendants()) do
+			add(d)
+		end
+	end
+	-- 2. Совпадение имён по всем корням
+	local lname = string.lower(remoteObj.Name)
+	if lname ~= "" then
+		for _, root in ipairs(searchRoots) do
+			for _, d in ipairs(root:GetDescendants()) do
+				if d:IsA("BaseScript") then
+					local ld = string.lower(d.Name)
+					if ld == lname or string.find(ld, lname, 1, true) or string.find(lname, ld, 1, true) then
+						add(d)
+					end
+				end
+			end
+			end
+	end
+	return list
 end
 
 -- Функции камеры и телепорта
@@ -716,7 +795,9 @@ togglePropsBtn.MouseButton1Click:Connect(function()
 	updateToggleVisuals()
 end)
 
-local function addPropRow(propName, propValue, order, liveGetter)
+local navigateInto -- forward declaration: определяется ниже, используется в панели свойств
+
+local function addPropRow(propName, propValue, order, liveGetter, onClick)
 	local row = Instance.new("Frame")
 	row.Size = UDim2.new(1, 0, 0, 22)
 	row.BackgroundTransparency = 1
@@ -749,6 +830,15 @@ local function addPropRow(propName, propValue, order, liveGetter)
 
 	if liveGetter then
 		table.insert(currentPropsLiveLabels, {label = valueLabel, getter = liveGetter})
+	end
+
+	-- Кликабельная строка (для перехода к связанному объекту)
+	if onClick then
+		row.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				onClick()
+			end
+		end)
 	end
 
 	return valueLabel
@@ -895,6 +985,19 @@ local function showProperties(obj)
 		addPropRow("Parent", obj.Parent and obj.Parent.Name or "(nil)", order, function() return obj.Parent and obj.Parent.Name or "(nil)" end); order += 1
 		addPropRow("Children", tostring(#obj:GetChildren()), order, function() return tostring(#obj:GetChildren()) end); order += 1
 		addPropRow("Descendants", tostring(#obj:GetDescendants()), order, function() return tostring(#obj:GetDescendants()) end); order += 1
+		-- Связанные RemoteEvent/RemoteFunction (клик по строке — переход к ремоуту)
+		local remotes = findRelatedRemotes(obj)
+		if #remotes > 0 then
+			addPropRow("── Remote ──", "", order); order += 1
+			for _, r in ipairs(remotes) do
+				local target = r
+				addPropRow(r.ClassName, r.Name .. " (в " .. (r.Parent and r.Parent.Name or "?") .. ")", order, nil, function()
+					navigateInto(target)
+				end); order += 1
+			end
+		else
+			addPropRow("── Remote ──", "не найдены", order); order += 1
+		end
 	elseif obj:IsA("Humanoid") then
 		addPropRow("Health", string.format("%.1f", obj.Health), order, function() return string.format("%.1f", obj.Health) end); order += 1
 		addPropRow("MaxHealth", tostring(obj.MaxHealth), order, function() return tostring(obj.MaxHealth) end); order += 1
@@ -908,6 +1011,22 @@ local function showProperties(obj)
 		addPropRow("Parent", obj.Parent and obj.Parent.Name or "(nil)", order, function() return obj.Parent and obj.Parent.Name or "(nil)" end); order += 1
 		addPropRow("Children", tostring(#obj:GetChildren()), order, function() return tostring(#obj:GetChildren()) end); order += 1
 		addPropRow("Descendants", tostring(#obj:GetDescendants()), order, function() return tostring(#obj:GetDescendants()) end); order += 1
+	elseif isRemote(obj) then
+		addPropRow("Parent", obj.Parent and obj.Parent.Name or "(nil)", order, function() return obj.Parent and obj.Parent.Name or "(nil)" end); order += 1
+		addPropRow("Children", tostring(#obj:GetChildren()), order, function() return tostring(#obj:GetChildren()) end); order += 1
+		-- Скрипты, вероятно использующие этот ремоут (клик — переход к скрипту)
+		local scripts = findRelatedScripts(obj)
+		if #scripts > 0 then
+			addPropRow("── Скрипты ──", "", order); order += 1
+			for _, s in ipairs(scripts) do
+				local target = s
+				addPropRow(s.ClassName, s.Name .. " (в " .. (s.Parent and s.Parent.Name or "?") .. ")", order, nil, function()
+					navigateInto(target)
+				end); order += 1
+			end
+		else
+			addPropRow("── Скрипты ──", "не найдены", order); order += 1
+		end
 	else
 		-- Универсальные свойства для любых объектов
 		addPropRow("Parent", obj.Parent and obj.Parent.Name or "(nil)", order, function() return obj.Parent and obj.Parent.Name or "(nil)" end); order += 1
@@ -1094,7 +1213,7 @@ end
 
 local showObjectContents
 
-local function navigateInto(obj)
+function navigateInto(obj)
 	if currentObject then
 		table.insert(navigationHistory, {obj = currentObject})
 	end
@@ -1283,11 +1402,6 @@ function showObjectContents(obj)
 		local groups = {}
 		local groupOrder = {}
 		for _, c in pairs(obj:GetChildren()) do
-			-- Скрыть зеркало ServerScriptService внутри ReplicatedStorage
-			-- (оно доступно как отдельная папка в верхнем списке)
-			if obj == ReplicatedStorage and c == getSssMirror() then
-				continue
-			end
 			local g = groups[c.Name]
 			if g then
 				g.count += 1
@@ -1507,15 +1621,10 @@ local function scanWorkspace()
 			end)
 		end
 		addServiceFolder(ReplicatedStorage, "ReplicatedStorage", 1)
-		local sssMirror = getSssMirror()
-		if sssMirror then
-			addServiceFolder(sssMirror, "ServerScriptService", 2)
-		end
 
-		local folderCount = sssMirror and 2 or 1
 		for i, name in ipairs(groupOrder) do
 			local g = groups[name]
-			createObjectButton(g.first, folderCount + i, g.count)
+			createObjectButton(g.first, 1 + i, g.count)
 		end
 	end
 
