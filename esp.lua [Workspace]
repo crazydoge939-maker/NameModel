@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -319,6 +320,33 @@ end)
 -- Проверка, является ли объект физическим (имеет позицию в мире)
 local function isPhysicalObject(obj)
 	return obj:IsA("BasePart") or obj:IsA("Model")
+end
+
+-- Корни поиска: Workspace и ReplicatedStorage.
+-- ServerScriptService клиент не видит напрямую (ограничение Roblox),
+-- поэтому серверный скрипт ServerScriptServiceMirror создаёт зеркало
+-- его содержимого в ReplicatedStorage.ServerScriptServiceMirror.
+local function getSssMirror()
+	return ReplicatedStorage:FindFirstChild("ServerScriptServiceMirror")
+end
+
+local searchRoots = {Workspace, ReplicatedStorage}
+
+-- Определить корень объекта: возвращает (корень, имя корня для хлебных крошек)
+local function getRootOf(obj)
+	local sssMirror = getSssMirror()
+	local current = obj
+	while current do
+		if sssMirror and current == sssMirror then
+			return sssMirror, "ServerScriptService"
+		elseif current == ReplicatedStorage then
+			return ReplicatedStorage, "ReplicatedStorage"
+		elseif current == Workspace then
+			return Workspace, "Workspace"
+		end
+		current = current.Parent
+	end
+	return Workspace, "Workspace"
 end
 
 -- Функции камеры и телепорта
@@ -986,7 +1014,7 @@ local function highlightObject(obj, searchParent)
 	end
 	highlightTree(obj)
 	-- Найти все объекты с таким же именем внутри searchParent
-	local parent = searchParent or Workspace
+	local parent = searchParent or getRootOf(obj)
 	for _, desc in pairs(parent:GetDescendants()) do
 		if desc ~= obj and desc.Name == targetName then
 			highlightTree(desc)
@@ -1005,7 +1033,7 @@ highlightToggleButton.MouseButton1Click:Connect(function()
 	elseif lastSelectedObject and lastSelectedObject.Parent then
 		-- Включаем: подсветить последний выбранный объект
 		highlightedObject = nil
-		highlightObject(lastSelectedObject, Workspace)
+		highlightObject(lastSelectedObject, getRootOf(lastSelectedObject))
 	end
 end)
 
@@ -1027,7 +1055,9 @@ local function getColorByType(obj)
 	elseif obj:IsA("LocalScript") then return Color3.fromRGB(0, 255, 255)
 	elseif obj:IsA("Humanoid") then return Color3.fromRGB(165, 55, 0)
 	elseif obj:IsA("ProximityPrompt") then return Color3.fromRGB(0, 0, 89)
-	else return Color3.fromRGB(0, 0, 0) end
+	elseif obj:IsA("RemoteEvent") then return Color3.fromRGB(255, 85, 0)
+	elseif obj:IsA("Sound") then return Color3.fromRGB(255, 85, 0)
+	else return Color3.fromRGB(255, 255, 255) end
 end
 
 local function getLabelTextByType(obj)
@@ -1040,12 +1070,19 @@ local function getLabelTextByType(obj)
 	elseif obj:IsA("LocalScript") then return "[LocalScipt]"
 	elseif obj:IsA("Humanoid") then return "[Humanoid]"
 	elseif obj:IsA("ProximityPrompt") then return "[ProximityPrompt]"
+	elseif obj:IsA("RemoteEvent") then return "[RemoteEvent]"
+	elseif obj:IsA("Sound") then return "[Sound]"
 	else return "[Object]" end
 end
 
 -- Хлебные крошки
 local function updateBreadcrumb()
-	local parts = {"Workspace"}
+	local target = currentObject
+	if not target and #navigationHistory > 0 then
+		target = navigationHistory[#navigationHistory].obj
+	end
+	local _, rootName = getRootOf(target or Workspace)
+	local parts = {rootName}
 	for _, entry in ipairs(navigationHistory) do
 		table.insert(parts, entry.obj.Name)
 	end
@@ -1075,7 +1112,7 @@ local function navigateBack()
 		currentObject = prev.obj
 		lastSelectedObject = prev.obj
 		showObjectContents(prev.obj)
-		highlightObject(prev.obj, Workspace)
+		highlightObject(prev.obj, getRootOf(prev.obj))
 		focusCameraOnObject(prev.obj)
 		updateBreadcrumb()
 	end
@@ -1246,6 +1283,11 @@ function showObjectContents(obj)
 		local groups = {}
 		local groupOrder = {}
 		for _, c in pairs(obj:GetChildren()) do
+			-- Скрыть зеркало ServerScriptService внутри ReplicatedStorage
+			-- (оно доступно как отдельная папка в верхнем списке)
+			if obj == ReplicatedStorage and c == getSssMirror() then
+				continue
+			end
 			local g = groups[c.Name]
 			if g then
 				g.count += 1
@@ -1319,7 +1361,7 @@ local function scanWorkspace()
 				parent = parent.Parent
 			end
 
-			highlightObject(targetObj, Workspace)
+			highlightObject(targetObj, getRootOf(targetObj))
 			pathLabel.Text = targetObj:GetFullName()
 			lastSelectedObject = targetObj
 			focusCameraOnObject(targetObj)
@@ -1376,14 +1418,18 @@ local function scanWorkspace()
 			local lowerQuery = string.lower(query)
 			local results = {}
 			local truncated = false
-			for _, desc in pairs(Workspace:GetDescendants()) do
-				local lname = string.lower(desc.Name)
-				local lclass = string.lower(desc.ClassName)
-				if string.find(lname, lowerQuery, 1, true) or string.find(lclass, lowerQuery, 1, true) then
-					table.insert(results, desc)
-					if #results >= 300 then
-						truncated = true
-						break
+			-- Поиск по всем корням: Workspace, ReplicatedStorage
+			for _, root in ipairs(searchRoots) do
+				if truncated then break end
+				for _, desc in pairs(root:GetDescendants()) do
+					local lname = string.lower(desc.Name)
+					local lclass = string.lower(desc.ClassName)
+					if string.find(lname, lowerQuery, 1, true) or string.find(lclass, lowerQuery, 1, true) then
+						table.insert(results, desc)
+						if #results >= 300 then
+							truncated = true
+							break
+						end
 					end
 				end
 			end
@@ -1439,9 +1485,37 @@ local function scanWorkspace()
 			end
 		end
 		table.sort(groupOrder)
+
+		-- Папки сервисов: ReplicatedStorage и ServerScriptService (через зеркало)
+		local function addServiceFolder(target, label, order)
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1, 0, 0, 24)
+			btn.LayoutOrder = order
+			btn.Text = label .. " [Folder]"
+			btn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
+			btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+			btn.TextScaled = true
+			btn.Font = Enum.Font.SourceSans
+			btn.Parent = panelScroll
+
+			local btnCorner = Instance.new("UICorner")
+			btnCorner.CornerRadius = UDim.new(0, 5)
+			btnCorner.Parent = btn
+
+			btn.MouseButton1Click:Connect(function()
+				navigateInto(target)
+			end)
+		end
+		addServiceFolder(ReplicatedStorage, "ReplicatedStorage", 1)
+		local sssMirror = getSssMirror()
+		if sssMirror then
+			addServiceFolder(sssMirror, "ServerScriptService", 2)
+		end
+
+		local folderCount = sssMirror and 2 or 1
 		for i, name in ipairs(groupOrder) do
 			local g = groups[name]
-			createObjectButton(g.first, i, g.count)
+			createObjectButton(g.first, folderCount + i, g.count)
 		end
 	end
 
@@ -1480,19 +1554,22 @@ local function scanWorkspace()
 		return true
 	end
 
-	Workspace.DescendantAdded:Connect(function(inst)
-		if shouldTrackInstance(inst) then
-			scheduleRefresh()
-		end
-	end)
+	-- Отслеживаем изменения во всех корнях (Workspace, ReplicatedStorage)
+	for _, root in ipairs(searchRoots) do
+		root.DescendantAdded:Connect(function(inst)
+			if shouldTrackInstance(inst) then
+				scheduleRefresh()
+			end
+		end)
 
-	-- DescendantRemoving — событие, срабатывающее перед удалением потомка
-	-- (DescendantRemoved не существует у Instance)
-	Workspace.DescendantRemoving:Connect(function(inst)
-		if shouldTrackInstance(inst) then
-			scheduleRefresh()
-		end
-	end)
+		-- DescendantRemoving — событие, срабатывающее перед удалением потомка
+		-- (DescendantRemoved не существует у Instance)
+		root.DescendantRemoving:Connect(function(inst)
+			if shouldTrackInstance(inst) then
+				scheduleRefresh()
+			end
+		end)
+	end
 end
 
 scanWorkspace()
